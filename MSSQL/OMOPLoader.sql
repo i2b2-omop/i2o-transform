@@ -207,24 +207,23 @@ GO
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 1. Demographics - v4.1 by Aaron Abend
--- Modified by Matthew Joss to support biobank flags
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetDemographics') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetDemographics
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdemographics') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdemographics
 go
 
-create procedure PCORNetDemographics as 
+create procedure OMOPdemographics as 
 
 DECLARE @sqltext NVARCHAR(4000);
 DECLARE @batchid numeric
 declare getsql cursor local for 
 --1 --  S,R,NH
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(gender_source_value,person_id,year_of_birth,time_of_birth,gender_concept_id,ethnicity_source_value,race_source_value) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
 	'	select ''1'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	''''+sex.pcori_basecode+''','+
+	''''+sex.omop_basecode+''','+
 	'''NI'','+
-	''''+race.pcori_basecode+''''+
+	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
 	'	where lower(p.sex_cd) in ('+lower(sex.c_dimcode)+') '+
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
@@ -235,13 +234,13 @@ declare getsql cursor local for
 	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union -- A - S,R,H
-select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''A'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	''''+sex.pcori_basecode+''','+
-	''''+hisp.pcori_basecode+''','+
-	''''+race.pcori_basecode+''''+
+	''''+sex.omop_basecode+''','+
+	''''+hisp.omop_basecode+''','+
+	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
 	'	where lower(p.sex_cd) in ('+lower(sex.c_dimcode)+') '+
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
@@ -255,11 +254,11 @@ select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HI
 	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''2'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	''''+sex.pcori_basecode+''','+
+	''''+sex.omop_basecode+''','+
 	'''NI'','+
 	'''NI'''+
 	' from i2b2patient p '+
@@ -270,13 +269,13 @@ union --2 S, nR, nH
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''3'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
 	'''NI'','+
 	'''NI'','+
-	''''+race.pcori_basecode+''''+
+	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
@@ -285,13 +284,13 @@ union --3 -- nS,R, NH
 	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
 	and race.c_visualattributes like 'L%'
 union --B -- nS,R, H
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''B'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
 	'''NI'','+
-	''''+hisp.pcori_basecode+''','+
-	''''+race.pcori_basecode+''''+
+	''''+hisp.omop_basecode+''','+
+	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
@@ -303,11 +302,11 @@ union --B -- nS,R, H
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
 union --4 -- S, NR, H
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''4'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	''''+sex.pcori_basecode+''','+
+	''''+sex.omop_basecode+''','+
 	'''Y'','+
 	'''NI'''+
 	' from i2b2patient p '+
@@ -318,7 +317,7 @@ union --4 -- S, NR, H
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --5 -- NS, NR, H
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''5'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
@@ -330,7 +329,7 @@ union --5 -- NS, NR, H
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 union --6 -- NS, NR, nH
-	select 'insert into PMNDEMOGRAPHIC(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
+	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
 	'	select ''6'',patient_num, '+
 	'	birth_date, '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
@@ -380,11 +379,11 @@ go
 -- TODO: This version does not translate codes in the visit_dimension columns, except inout_cd (enc_type)
 -- Bugfix: Multiple DRGs in one encounter no longer causes error
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetEncounter') AND type in (N'P', N'PC'))
-DROP PROCEDURE PCORNetEncounter
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPencounter') AND type in (N'P', N'PC'))
+DROP PROCEDURE OMOPencounter
 GO
 
-create procedure PCORNetEncounter as
+create procedure OMOPencounter as
 
 DECLARE @sqltext NVARCHAR(4000);
 begin
@@ -427,10 +426,10 @@ go
 --        now ignores facts with a condition modifier
 --        6.1. optimized for temp tables
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetDiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetDiagnosis
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdiagnosis
 go
 
-create procedure PCORNetDiagnosis as
+create procedure OMOPdiagnosis as
 declare @sqltext nvarchar(4000)
 begin
 
@@ -486,10 +485,10 @@ go
 -- Notes: in the current version condition_status is imputed from resolve_date (which is derived from end_date) 
 --  and onset_date is not supported
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetCondition') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetCondition
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPcondition') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPcondition
 go
 
-create procedure PCORNetCondition as
+create procedure OMOPcondition as
 declare @sqltext nvarchar(4000)
 begin
 
@@ -529,10 +528,10 @@ go
 -- 0.6.4 - NI in px_source, fixed encounter start vs. fact start
 -- 0.6.5 - Somehow was referencing the wrong column name from encounter table for admit date
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetProcedure') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetProcedure
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
 
-create procedure PCORNetProcedure as
+create procedure OMOPprocedure as
 
 begin
 insert into pmnprocedure( 
@@ -559,11 +558,11 @@ go
 -- v0.6.4 now correctly merges modifiers
 -- TODO: This does not do unit conversions.
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetVital') AND type in (N'P', N'PC'))
-DROP PROCEDURE PCORNetVital
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPvital') AND type in (N'P', N'PC'))
+DROP PROCEDURE OMOPvital
 GO
 
-create procedure PCORNetVital as
+create procedure OMOPvital as
 begin
 -- jgk: I took out admit_date - it doesn't appear in the scheme. Now in SQLServer format - date, substring, name on inner select, no nested with. Added modifiers and now use only pathnames, not codes.
 insert into pmnVITAL(patid, encounterid, measure_date, measure_time,vital_source,ht, wt, diastolic, systolic, original_bmi, bp_position,smoking,tobacco,tobacco_type)
@@ -660,11 +659,11 @@ go
 -- Written by Jeff Klann, PhD
 -- v6 Updated 9/30/15 - now supports loyalty cohort (be sure view at the top of the script is updated)
 -- Bugfix 1/11/16 - BASIS should be called ENR_BASIS
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetEnroll') AND type in (N'P', N'PC'))
-DROP PROCEDURE PCORNetEnroll
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPenroll') AND type in (N'P', N'PC'))
+DROP PROCEDURE OMOPenroll
 GO
 
-create procedure PCORNetEnroll as
+create procedure OMOPenroll as
 begin
 
 INSERT INTO [pmnENROLLMENT]([PATID], [ENR_START_DATE], [ENR_END_DATE], [CHART], [ENR_BASIS]) 
@@ -687,9 +686,9 @@ go
 -- 12/9/15 - Optimized to use temp tables
 -- Written by Jeff Klann, PhD and Arturo Torres
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetLabResultCM') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetLabResultCM;
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPlabResultCM') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPlabResultCM;
 GO
-create procedure PCORNetLabResultCM as
+create procedure OMOPlabResultCM as
 begin
 
 -- Optimized to use temp tables; also, removed "distinct" - much faster and seems unnecessary - 12/9/15
@@ -812,9 +811,9 @@ GO
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- BUGFIX 04/22/16: Needed leading zeros on numbers
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetHarvest') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetHarvest;
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPharvest') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPharvest;
 GO
-create procedure PCORNetHarvest as
+create procedure OMOPharvest as
 begin
 
 INSERT INTO [dbo].[pmnharvest]([NETWORKID], [NETWORK_NAME], [DATAMARTID], [DATAMART_NAME], [DATAMART_PLATFORM], [CDM_VERSION], [DATAMART_CLAIMS], [DATAMART_EHR], [BIRTH_DATE_MGMT], [ENR_START_DATE_MGMT], [ENR_END_DATE_MGMT], [ADMIT_DATE_MGMT], [DISCHARGE_DATE_MGMT], [PX_DATE_MGMT], [RX_ORDER_DATE_MGMT], [RX_START_DATE_MGMT], [RX_END_DATE_MGMT], [DISPENSE_DATE_MGMT], [LAB_ORDER_DATE_MGMT], [SPECIMEN_DATE_MGMT], [RESULT_DATE_MGMT], [MEASURE_DATE_MGMT], [ONSET_DATE_MGMT], [REPORT_DATE_MGMT], [RESOLVE_DATE_MGMT], [PRO_DATE_MGMT], [REFRESH_DEMOGRAPHIC_DATE], [REFRESH_ENROLLMENT_DATE], [REFRESH_ENCOUNTER_DATE], [REFRESH_DIAGNOSIS_DATE], [REFRESH_PROCEDURES_DATE], [REFRESH_VITAL_DATE], [REFRESH_DISPENSING_DATE], [REFRESH_LAB_RESULT_CM_DATE], [REFRESH_CONDITION_DATE], [REFRESH_PRO_CM_DATE], [REFRESH_PRESCRIBING_DATE], [REFRESH_PCORNET_TRIAL_DATE], [REFRESH_DEATH_DATE], [REFRESH_DEATH_CAUSE_DATE]) 
@@ -830,9 +829,9 @@ GO
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
 -- TODO: The first encounter inner join seems to slow things down
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetPrescribing') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetPrescribing;
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprescribing') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprescribing;
 GO
-create procedure PCORNetPrescribing as
+create procedure OMOPprescribing as
 begin
 
 -- Griffin's optimization: use temp tables rather than left joining directly - 12/9/15
@@ -946,9 +945,9 @@ GO
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetDispensing') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetDispensing;
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdispensing') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdispensing;
 GO
-create procedure PCORNetDispensing as
+create procedure OMOPdispensing as
 begin
 
 -- Griffin's optimizations - 12/9/15
@@ -1010,11 +1009,11 @@ GO
 -- 10. Death - v1 by Jeff Klann, PhD
 -- Simple transform only pulls death date from patient dimension, does not rely on an ontology
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'PCORNetDeath') AND type in (N'P', N'PC')) DROP PROCEDURE PCORNetDeath
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdeath') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdeath
 go
 
 
-create procedure PCORNetDeath as
+create procedure OMOPdeath as
 
 begin
 insert into pmndeath( 
@@ -1036,10 +1035,10 @@ go
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 10. clear Program - includes all tables
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'pcornetclear') AND type in (N'P', N'PC')) DROP PROCEDURE pcornetclear
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPclear') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPclear
 go
 
-create procedure pcornetclear
+create procedure OMOPclear
 as 
 begin
 
@@ -1062,27 +1061,27 @@ go
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 11. Load Program
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'pcornetloader') AND type in (N'P', N'PC')) DROP PROCEDURE pcornetloader
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPloader') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPloader
 go
 
-create procedure pcornetloader
+create procedure OMOPloader
 as
 begin
 
-exec pcornetclear
-exec PCORNetHarvest
-exec PCORNetDemographics
-exec PCORNetEncounter
-exec PCORNetDiagnosis
-exec PCORNetCondition
-exec PCORNetProcedure
-exec PCORNetVital
-exec PCORNetEnroll
-exec PCORNetLabResultCM
-exec PCORNetPrescribing
-exec PCORNetDispensing
-exec PCORNetDeath
-exec pcornetreport
+exec OMOPclear
+exec OMOPharvest
+exec OMOPdemographics
+exec OMOPencounter
+exec OMOPdiagnosis
+exec OMOPcondition
+exec OMOPprocedure
+exec OMOPvital
+exec OMOPenroll
+exec OMOPlabResultCM
+exec OMOPprescribing
+exec OMOPdispensing
+exec OMOPdeath
+exec OMOPreport
 
 end
 go
@@ -1091,10 +1090,10 @@ go
 -- 12. Report Results - Version 5.1 by Aaron Abend and Jeff Klann
 -- This version is useful to check against i2b2, but consider running the more detailed annotated data dictionary tool also.
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'pcornetReport') AND type in (N'P', N'PC')) DROP PROCEDURE pcornetReport
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPreport') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPreport
 go
 
-CREATE PROCEDURE [dbo].[pcornetReport] 
+CREATE PROCEDURE [dbo].[OMOPreport] 
 as
 declare @i2b2vitald numeric
 declare @i2b2dxd numeric
