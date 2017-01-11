@@ -65,7 +65,7 @@ create synonym pcornet_proc for PMI..pcornet_proc
 GO
 create synonym pcornet_vital for PMI..pcornet_vital
 GO
-create synonym pcornet_enc for PMI..pcornet_enc
+create synonym pcornet_enc for PMI..pcornet_enc_15
 GO
 
 -- Create the demographics codelist (no need to modify)
@@ -395,27 +395,16 @@ DECLARE @sqltext NVARCHAR(4000);
 begin
 
 insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visit_start_time, 
-		visit_end_date,visit_end_time,provider_id,FACILITY_LOCATION  
-		,visit_concept_id ,care_site_id,DISCHARGE_DISPOSITION , 
-		DISCHARGE_STATUS ,DRG ,DRG_TYPE ,ADMITTING_SOURCE) 
+		visit_end_date,visit_end_time,provider_id,  
+		visit_concept_id ,care_site_id,visit_type_concept_id) 
 select distinct v.patient_num, v.encounter_num,  
 	start_Date, 
 	substring(convert(varchar,start_Date,20),12,5), 
 	end_Date, 
 	substring(convert(varchar, end_Date,20),12,5),  
-	providerid,location_zip, 
-(case when pcori_enctype is not null then pcori_enctype else 'UN' end) enc_type, facilityid,  CASE WHEN pcori_enctype='AV' THEN 'NI' ELSE  discharge_disposition END , CASE WHEN pcori_enctype='AV' THEN 'NI' ELSE discharge_status END  , drg.drg, drg_type, CASE WHEN admitting_source IS NULL THEN 'NI' ELSE admitting_source END  
-from i2b2visit v inner join pmndemographic d on v.patient_num=d.patid
-left outer join 
-   (select * from
-   (select *,row_number() over (partition by  patient_num, encounter_num order by drg_type desc) AS rn from 
-   (select patient_num,encounter_num,drg_type,max(drg) drg  from
-    (select distinct f.patient_num,encounter_num,substring(c_fullname,22,2) drg_type,substring(omop_basecode,charindex(':',omop_basecode)+1,3) drg from i2b2fact f 
-     inner join pmndemographic d on f.patient_num=d.patid
-     inner join pcornet_enc enc on enc.c_basecode  = f.concept_cd   
-      and enc.c_fullname like '\PCORI\ENCOUNTER\DRG\%') drg1 group by patient_num,encounter_num,drg_type) drg) drg
-     where rn=1) drg -- This section is bugfixed to only include 1 drg if multiple DRG types exist in a single encounter...
-  on drg.patient_num=v.patient_num and drg.encounter_num=v.encounter_num
+	providerid, 
+(case when pcori_enctype is not null then pcori_enctype else 'UN' end) enc_type, facilityid, '44818518'  
+from i2b2visit v inner join person d on v.patient_num=d.person_id
 left outer join 
 -- Encounter type. Note that this requires a full table scan on the ontology table, so it is not particularly efficient.
 (select patient_num, encounter_num, inout_cd,substring(omop_basecode,charindex(':',omop_basecode)+1,2) pcori_enctype from i2b2visit v
