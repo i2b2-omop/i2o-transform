@@ -78,13 +78,13 @@ delete from pmnharvest
 GO
 exec PCORNetHarvest
 GO
-delete from pmndemographic
+delete from person
 GO
-exec PCORNetDemographics
+exec OMOPdemographics
 GO
-delete from pmnENCOUNTER
+delete from visit_occurrence
 GO
-exec PCORNetEncounter
+exec OMOPencounter
 GO
 delete from pmndiagnosis
 GO

@@ -217,12 +217,14 @@ DECLARE @sqltext NVARCHAR(4000);
 DECLARE @batchid numeric
 declare getsql cursor local for 
 --1 --  S,R,NH
-	select 'insert into person(gender_source_value,person_id,year_of_birth,time_of_birth,gender_concept_id,ethnicity_source_value,race_source_value) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
-	'	select ''1'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
 	''''+sex.omop_basecode+''','+
-	'''NI'','+
+	'0,'+
 	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
 	'	where lower(p.sex_cd) in ('+lower(sex.c_dimcode)+') '+
@@ -234,9 +236,11 @@ declare getsql cursor local for
 	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union -- A - S,R,H
-select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''A'',patient_num, '+
-	'	birth_date, '+
+select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
 	''''+sex.omop_basecode+''','+
 	''''+hisp.omop_basecode+''','+
@@ -254,13 +258,15 @@ select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, 
 	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
-	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''2'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
 	''''+sex.omop_basecode+''','+
-	'''NI'','+
-	'''NI'''+
+	'0,'+
+	'0'+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) in ('+lower(sex.c_dimcode)+') '+
 	'	and	lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
@@ -269,12 +275,14 @@ union --2 S, nR, nH
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
-	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''3'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	'''NI'','+
-	'''NI'','+
+	'0,'+
+	'0,'+
 	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
@@ -284,11 +292,13 @@ union --3 -- nS,R, NH
 	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
 	and race.c_visualattributes like 'L%'
 union --B -- nS,R, H
-	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''B'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	'''NI'','+
+	'0,'+
 	''''+hisp.omop_basecode+''','+
 	''''+race.omop_basecode+''''+
 	' from i2b2patient p '+
@@ -302,13 +312,15 @@ union --B -- nS,R, H
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
 union --4 -- S, NR, H
-	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''4'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
 	''''+sex.omop_basecode+''','+
-	'''Y'','+
-	'''NI'''+
+	'38003563,'+
+	'0'+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''NI'')) in ('+lower(sex.c_dimcode)+') '+
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
@@ -317,25 +329,29 @@ union --4 -- S, NR, H
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --5 -- NS, NR, H
-	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''5'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	'''NI'','+
-	'''Y'','+
-	'''NI'''+
+	'0,'+
+	'38003563,'+
+	'0'+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 union --6 -- NS, NR, nH
-	select 'insert into person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) '+
-	'	select ''6'',patient_num, '+
-	'	birth_date, '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	year(birth_date), '+
+    '	month(birth_date), '+
+    '	day(birth_date), '+
 	'	substring(convert(varchar,birth_date,20),12,5), '+
-	'''NI'','+
-	'''NI'','+
-	'''NI'''+
+	'0,'+
+	'0,'+
+	'0'+
 	' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '+
@@ -359,16 +375,6 @@ END
 CLOSE getsql;
 DEALLOCATE getsql;
 
---UPDATE pmndemographic TO DISPLAY CORRECT BIOBANK_FLAG BASED ON CONCEPT CODE LISTED IN OBSERVATION_FACT: modified by Matthew Joss
-
-UPDATE pmndemographic
-SET BIOBANK_FLAG = 'Y' 
-WHERE PATID IN (SELECT PATID FROM pmndemographic demo INNER JOIN i2b2fact OBS
-ON demo.PATID = OBS.PATIENT_NUM 
-INNER JOIN pcornet_demo P 
-ON OBS.CONCEPT_CD = P.C_BASECODE 
-WHERE P.C_FULLNAME LIKE '\PCORI\DEMOGRAPHIC\BIOBANK_FLAG\Y\%')
-
 end
 
 go
@@ -388,9 +394,9 @@ create procedure OMOPencounter as
 DECLARE @sqltext NVARCHAR(4000);
 begin
 
-insert into pmnencounter(PATID,ENCOUNTERID,admit_date ,ADMIT_TIME , 
-		DISCHARGE_DATE ,DISCHARGE_TIME ,PROVIDERID ,FACILITY_LOCATION  
-		,ENC_TYPE ,FACILITYID ,DISCHARGE_DISPOSITION , 
+insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visit_start_time, 
+		visit_end_date,visit_end_time,provider_id,FACILITY_LOCATION  
+		,visit_concept_id ,care_site_id,DISCHARGE_DISPOSITION , 
 		DISCHARGE_STATUS ,DRG ,DRG_TYPE ,ADMITTING_SOURCE) 
 select distinct v.patient_num, v.encounter_num,  
 	start_Date, 
@@ -404,7 +410,7 @@ left outer join
    (select * from
    (select *,row_number() over (partition by  patient_num, encounter_num order by drg_type desc) AS rn from 
    (select patient_num,encounter_num,drg_type,max(drg) drg  from
-    (select distinct f.patient_num,encounter_num,substring(c_fullname,22,2) drg_type,substring(pcori_basecode,charindex(':',pcori_basecode)+1,3) drg from i2b2fact f 
+    (select distinct f.patient_num,encounter_num,substring(c_fullname,22,2) drg_type,substring(omop_basecode,charindex(':',omop_basecode)+1,3) drg from i2b2fact f 
      inner join pmndemographic d on f.patient_num=d.patid
      inner join pcornet_enc enc on enc.c_basecode  = f.concept_cd   
       and enc.c_fullname like '\PCORI\ENCOUNTER\DRG\%') drg1 group by patient_num,encounter_num,drg_type) drg) drg
@@ -412,7 +418,7 @@ left outer join
   on drg.patient_num=v.patient_num and drg.encounter_num=v.encounter_num
 left outer join 
 -- Encounter type. Note that this requires a full table scan on the ontology table, so it is not particularly efficient.
-(select patient_num, encounter_num, inout_cd,substring(pcori_basecode,charindex(':',pcori_basecode)+1,2) pcori_enctype from i2b2visit v
+(select patient_num, encounter_num, inout_cd,substring(omop_basecode,charindex(':',omop_basecode)+1,2) pcori_enctype from i2b2visit v
  inner join pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%') enctype
   on enctype.patient_num=v.patient_num and enctype.encounter_num=v.encounter_num
 
