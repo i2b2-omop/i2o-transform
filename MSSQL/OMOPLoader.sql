@@ -400,14 +400,14 @@ insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visi
 select distinct v.patient_num, v.encounter_num,  
 	start_Date, 
 	substring(convert(varchar,start_Date,20),12,5), 
-	end_Date, 
+	(case when end_date is not null then end_date else '0' end) end_Date, 
 	substring(convert(varchar, end_Date,20),12,5),  
-	providerid, 
-(case when pcori_enctype is not null then pcori_enctype else 'UN' end) enc_type, facilityid, '44818518'  
+	'0', 
+(case when omop_enctype is not null then omop_enctype else '0' end) enc_type, '0', '44818518'  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 left outer join 
 -- Encounter type. Note that this requires a full table scan on the ontology table, so it is not particularly efficient.
-(select patient_num, encounter_num, inout_cd,substring(omop_basecode,charindex(':',omop_basecode)+1,2) pcori_enctype from i2b2visit v
+(select patient_num, encounter_num, inout_cd,omop_basecode omop_enctype from i2b2visit v
  inner join pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%') enctype
   on enctype.patient_num=v.patient_num and enctype.encounter_num=v.encounter_num
 
