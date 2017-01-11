@@ -396,14 +396,14 @@ begin
 
 insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visit_start_time, 
 		visit_end_date,visit_end_time,provider_id,  
-		visit_concept_id ,care_site_id,visit_type_concept_id) 
+		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
 select distinct v.patient_num, v.encounter_num,  
 	start_Date, 
-	substring(convert(varchar,start_Date,20),12,5), 
-	(case when end_date is not null then end_date else '0' end) end_Date, 
-	substring(convert(varchar, end_Date,20),12,5),  
+	cast(start_Date as time), 
+	(case when end_date is not null then end_date else start_date end) end_Date, 
+	(case when end_date is not null then cast(end_Date as time) else cast(start_date as time) end),  
 	'0', 
-(case when omop_enctype is not null then omop_enctype else '0' end) enc_type, '0', '44818518'  
+(case when omop_enctype is not null then omop_enctype else '0' end) enc_type, '0', '44818518',v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 left outer join 
 -- Encounter type. Note that this requires a full table scan on the ontology table, so it is not particularly efficient.
