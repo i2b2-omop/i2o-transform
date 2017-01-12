@@ -1,0 +1,3 @@
+
+SELECT * FROM [dbo].[PCORNET_ENC_15]
+GO
