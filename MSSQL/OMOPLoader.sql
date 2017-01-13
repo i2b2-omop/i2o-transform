@@ -218,7 +218,7 @@ DECLARE @batchid numeric
 declare getsql cursor local for 
 --1 --  S,R,NH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'' '''+sex.c_name+''',p.race_cd+'':'' '''+race.c_name+''',p.race_cd,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -237,7 +237,7 @@ declare getsql cursor local for
 	and sex.c_visualattributes like 'L%'
 union -- A - S,R,H
 select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'' '''+sex.c_name+''',p.race_cd+'':'' '''+race.c_name+''',p.race_cd+'':'' '''+hisp.c_name+''',patient_num, '+ --'	select p.sex_cd+'':''+sex.c_name,p.race_cd+'':''+race.c_name,p.race_cd+'':''+hisp.c_name,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -259,7 +259,7 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'' '''+sex.c_name+''',p.race_cd,p.race_cd,patient_num, '+ --'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -276,7 +276,7 @@ union --2 S, nR, nH
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd,p.race_cd+'':'' '''+race.c_name+''',p.race_cd,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -293,7 +293,7 @@ union --3 -- nS,R, NH
 	and race.c_visualattributes like 'L%'
 union --B -- nS,R, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd,p.race_cd+'':'' '''+race.c_name+''',p.race_cd+'':'' '''+hisp.c_name+''',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -313,7 +313,7 @@ union --B -- nS,R, H
 	and hisp.c_visualattributes like 'L%'
 union --4 -- S, NR, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'' '''+sex.c_name+''',p.race_cd,p.race_cd,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -344,7 +344,7 @@ union --5 -- NS, NR, H
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 union --6 -- NS, NR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd,p.race_cd,p.race_cd+,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -491,11 +491,11 @@ begin
 -- TODO: Could be further optimized to use the same temp table as diagnosis
 select  patient_num, encounter_num, provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
 into #sourcefact from i2b2fact factline 
-inner join pmnENCOUNTER enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num
+inner join OMOPencounter enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num
 inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode 
 where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
 
-insert into pmncondition (patid, encounterid, report_date, resolve_date, condition, condition_type, condition_status, condition_source)
+insert into condition_occurrence (person_id, condition_occurrence_id, condition_start_date, condition_end_date, condition_concept_id, condition_type_concept_id, condition_source_value, condition_source_concept_id)  --(patid, encounterid, report_date, resolve_date, condition, condition_type, condition_status, condition_source)
 select distinct factline.patient_num, min(factline.encounter_num) encounterid, min(factline.start_date) report_date, isnull(max(factline.end_date),null) resolve_date, 
 substring(diag.pcori_basecode,charindex(':',diag.pcori_basecode)+1,10), -- jgk bugfix 10/3 
 substring(diag.c_fullname,18,2) condition_type,  
