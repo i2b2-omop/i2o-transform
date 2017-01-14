@@ -206,7 +206,7 @@ GO
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 1. Demographics - v4.1 by Aaron Abend
+-- 1. Demographics 
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdemographics') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdemographics
 go
@@ -218,7 +218,7 @@ DECLARE @batchid numeric
 declare getsql cursor local for 
 --1 --  S,R,NH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
-	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':'+race.c_name+''',p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':'+race.c_name+''',p.race_cd+'':Unknown'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -259,7 +259,7 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd,p.race_cd,patient_num, '+ --'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':Unknown'',p.race_cd+'':Unknown'',patient_num, '+ --'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -276,7 +276,7 @@ union --2 S, nR, nH
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd+'':'+race.c_name+''',p.race_cd,patient_num, '+
+	'	select p.sex_cd,p.race_cd+'':'+race.c_name+''',p.race_cd+'':Unknown'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -313,7 +313,7 @@ union --B -- nS,R, H
 	and hisp.c_visualattributes like 'L%'
 union --4 -- S, NR, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':Unknown'',p.race_cd+'':Hispanic'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -330,7 +330,7 @@ union --4 -- S, NR, H
 	and sex.c_visualattributes like 'L%'
 union --5 -- NS, NR, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd,p.race_cd+'':Unknown'',p.race_cd+'':Hispanic'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
@@ -344,7 +344,7 @@ union --5 -- NS, NR, H
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 union --6 -- NS, NR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
-	'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
+	'	select p.sex_cd,p.race_cd+'':Unknown'',p.race_cd+'':Unknown'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
