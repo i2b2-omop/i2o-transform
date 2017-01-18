@@ -451,7 +451,11 @@ and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
 select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, --bug fix MJ 10/7/16
-isnull(diag.omop_basecode, '0'), '0', end_date, pcori_basecode, omop_sourcecode
+isnull(diag.omop_basecode, '0'), 
+CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
+    CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
+    ELSE 38000245 END, 
+end_date, pcori_basecode, omop_sourcecode
 from i2b2fact factline
 inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
  left outer join #sourcefact sf
@@ -473,7 +477,7 @@ where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
   ( not ( diag.omop_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
   and not ( diag.omop_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
   and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.omop_basecode like '[0-9]%') )) 
-and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
+--and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
 
 end
 go
