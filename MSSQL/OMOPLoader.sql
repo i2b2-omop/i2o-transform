@@ -427,6 +427,7 @@ go
 --   new: removed factline cache
 --        now ignores facts with a condition modifier
 --        6.1. optimized for temp tables
+-- + 3a. Condition, combined within this procedure.
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdiagnosis
 go
@@ -479,48 +480,6 @@ where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
   and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.omop_basecode like '[0-9]%') )) 
 --and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
 
-end
-go
-
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
--- 3a. Condition - v6.1 by Jeff Klann, derived from Diagnosis above
--- Notes: in the current version condition_status is imputed from resolve_date (which is derived from end_date) 
---  and onset_date is not supported
-----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPcondition') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPcondition
-go
-
-create procedure OMOPcondition as
-declare @sqltext nvarchar(4000)
-begin
-
--- Optimized to use a temp table; also removed "distinct" 12/9/15
--- TODO: Could be further optimized to use the same temp table as diagnosis
-select  patient_num, encounter_num, provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
-into #sourcefact from i2b2fact factline 
-inner join OMOPencounter enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num
-inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode 
-where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
-
-insert into condition_occurrence (person_id, condition_occurrence_id, condition_start_date, condition_end_date, condition_concept_id, condition_type_concept_id, condition_source_value, condition_source_concept_id)  --(patid, encounterid, report_date, resolve_date, condition, condition_type, condition_status, condition_source)
-select distinct factline.patient_num, min(factline.encounter_num) encounterid, min(factline.start_date) report_date, isnull(max(factline.end_date),null) resolve_date, 
-substring(diag.omop_basecode,charindex(':',diag.omop_basecode)+1,10), -- jgk bugfix 10/3 
-substring(diag.c_fullname,18,2) condition_type,  
-	case max(factline.end_date) when null then 'NI' else 'RS' end condition_status, -- Imputed so might not be entirely accurate
-	isnull(substring(max(dxsource),charindex(':',max(dxsource))+1,2),'NI') condition_source
-from i2b2fact factline
-inner join pmnENCOUNTER enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num
-inner join pcornet_diag diag on diag.c_basecode  = factline.concept_cd   
- left outer join #sourcefact sf
-on	factline.patient_num=sf.patient_num
-and factline.encounter_num=sf.encounter_num
-and factline.provider_id=sf.provider_id
-and factline.concept_cd=sf.concept_Cd
-and factline.start_date=sf.start_Date  
-where diag.c_fullname like '\PCORI\DIAGNOSIS\%'
-and sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\CONDITION_SOURCE\%'
-group by factline.patient_num, diag.omop_basecode, diag.c_fullname
 end
 go
 

@@ -63,10 +63,6 @@ delete from condition_occurrence
 GO
 exec OMOPdiagnosis
 GO
-delete from pmncondition
-GO
-exec PCORNetCondition
-GO
 delete from pmnprocedure
 GO
 exec PCORNetProcedure
