@@ -59,9 +59,9 @@ delete from visit_occurrence
 GO
 exec OMOPencounter
 GO
-delete from pmndiagnosis
+delete from condition_occurrence
 GO
-exec PCORNetDiagnosis
+exec OMOPdiagnosis
 GO
 delete from pmncondition
 GO

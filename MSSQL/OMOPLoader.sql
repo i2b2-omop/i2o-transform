@@ -108,6 +108,13 @@ GO
 
 -- Download SQL to create the tables from https://github.com/OHDSI/CommonDataModel
 
+Alter Table condition_occurrence Drop Column condition_occurrence_id
+Go
+
+Alter Table condition_occurrence
+Add condition_occurrence_id Int Identity(1, 1)
+Go
+
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prep-to-transform code
@@ -429,27 +436,24 @@ declare @sqltext nvarchar(4000)
 begin
 
 -- Optimized to use temp tables, not views. Also removed the distinct for speed.
-select  patient_num, encounter_num, provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
+select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
  into #sourcefact
 from i2b2fact factline
-inner join pmnENCOUNTER enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num
+inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
 inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
 where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
 
-select  patient_num, encounter_num, provider_id, concept_cd, start_date, dxsource.pcori_basecode pdxsource,dxsource.c_fullname 
+select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, dxsource.pcori_basecode pdxsource,dxsource.c_fullname 
 into #pdxfact from i2b2fact factline 
-inner join pmnENCOUNTER enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num 
+inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num 
 inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
-insert into pmndiagnosis (patid,			encounterid,	enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
-select distinct factline.patient_num, factline.encounter_num encounterid,	enc_type, enc.admit_date, enc.providerid, --bug fix MJ 10/7/16
-substring(diag.pcori_basecode,charindex(':',diag.pcori_basecode)+1,10), -- jgk bugfix 10/3 
-substring(diag.c_fullname,18,2) dxtype,  
-	CASE WHEN enc_type='AV' THEN 'FI' ELSE isnull(substring(dxsource,charindex(':',dxsource)+1,2) ,'NI') END,
-	isnull(substring(pdxsource,charindex(':',pdxsource)+1,2),'NI') -- jgk bugfix 9/28/15 
+insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
+select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, --bug fix MJ 10/7/16
+isnull(diag.omop_basecode, '0'), '0', end_date, pcori_basecode, omop_sourcecode
 from i2b2fact factline
-inner join pmnENCOUNTER enc on enc.patid = factline.patient_num and enc.encounterid = factline.encounter_Num
+inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
  left outer join #sourcefact sf
 on	factline.patient_num=sf.patient_num
 and factline.encounter_num=sf.encounter_num
@@ -466,9 +470,9 @@ inner join pcornet_diag diag on diag.c_basecode  = factline.concept_cd
 -- Skip ICD-9 V codes in 10 ontology, ICD-9 E codes in 10 ontology, ICD-10 numeric codes in 10 ontology
 -- Note: makes the assumption that ICD-9 Ecodes are not ICD-10 Ecodes; same with ICD-9 V codes. On inspection seems to be true.
 where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
-  ( not ( diag.pcori_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
-  and not ( diag.pcori_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
-  and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.pcori_basecode like '[0-9]%') )) 
+  ( not ( diag.omop_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
+  and not ( diag.omop_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
+  and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.omop_basecode like '[0-9]%') )) 
 and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
 
 end
@@ -497,7 +501,7 @@ where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
 
 insert into condition_occurrence (person_id, condition_occurrence_id, condition_start_date, condition_end_date, condition_concept_id, condition_type_concept_id, condition_source_value, condition_source_concept_id)  --(patid, encounterid, report_date, resolve_date, condition, condition_type, condition_status, condition_source)
 select distinct factline.patient_num, min(factline.encounter_num) encounterid, min(factline.start_date) report_date, isnull(max(factline.end_date),null) resolve_date, 
-substring(diag.pcori_basecode,charindex(':',diag.pcori_basecode)+1,10), -- jgk bugfix 10/3 
+substring(diag.omop_basecode,charindex(':',diag.omop_basecode)+1,10), -- jgk bugfix 10/3 
 substring(diag.c_fullname,18,2) condition_type,  
 	case max(factline.end_date) when null then 'NI' else 'RS' end condition_status, -- Imputed so might not be entirely accurate
 	isnull(substring(max(dxsource),charindex(':',max(dxsource))+1,2),'NI') condition_source
@@ -512,7 +516,7 @@ and factline.concept_cd=sf.concept_Cd
 and factline.start_date=sf.start_Date  
 where diag.c_fullname like '\PCORI\DIAGNOSIS\%'
 and sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\CONDITION_SOURCE\%'
-group by factline.patient_num, diag.pcori_basecode, diag.c_fullname
+group by factline.patient_num, diag.omop_basecode, diag.c_fullname
 end
 go
 
