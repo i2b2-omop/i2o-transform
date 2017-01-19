@@ -98,3 +98,10 @@ select  condition_type_concept_id, count(*) from condition_occurrence group by c
 
 
 select * from pcornet_diag where omop_sourcecode=omop_basecode
+
+select x.person_id,x.visit_occurrence_id,c.condition_source_concept_id,c.condition_concept_id,p.concept_name from
+(select person_id,visit_occurrence_id,count(*) c from condition_occurrence group by person_id,visit_occurrence_id) x
+inner join condition_occurrence c on c.visit_occurrence_id=x.visit_occurrence_id
+inner join concept p on p.concept_id=c.condition_concept_id
+where x.c>1 and p.domain_id='Condition' order by x.person_id,x.visit_occurrence_id,c.condition_source_concept_id
+
