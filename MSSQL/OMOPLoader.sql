@@ -452,11 +452,11 @@ and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
 select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, --bug fix MJ 10/7/16
-isnull(diag.omop_basecode, '0'), 
+isnull(omap.concept_id, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
     ELSE 38000245 END, 
-end_date, pcori_basecode, omop_sourcecode
+end_date, pcori_basecode, diag.omop_sourcecode
 from i2b2fact factline
 inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
  left outer join #sourcefact sf
@@ -472,6 +472,7 @@ and factline.provider_id=pf.provider_id --bug fix MJ 10/7/16, JK 12/7/16
 and factline.concept_cd=pf.concept_cd
 and factline.start_date=pf.start_Date --bug fix MJ 10/7/16, JK 12/7/16
 inner join pcornet_diag diag on diag.c_basecode  = factline.concept_cd
+inner join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode
 -- Skip ICD-9 V codes in 10 ontology, ICD-9 E codes in 10 ontology, ICD-10 numeric codes in 10 ontology
 -- Note: makes the assumption that ICD-9 Ecodes are not ICD-10 Ecodes; same with ICD-9 V codes. On inspection seems to be true.
 where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
@@ -482,7 +483,6 @@ where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
 
 end
 go
-
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 4. Procedures - v6 by Aaron Abend and Jeff Klann
