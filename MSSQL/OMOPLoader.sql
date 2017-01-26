@@ -115,6 +115,13 @@ Alter Table condition_occurrence
 Add condition_occurrence_id Int Identity(1, 1)
 Go
 
+Alter Table procedure_occurrence Drop Column procedure_occurrence_id
+Go
+
+Alter Table procedure_occurrence
+Add procedure_occurrence_id Int Identity(1, 1)
+Go
+
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prep-to-transform code
@@ -496,17 +503,64 @@ go
 create procedure OMOPprocedure as
 
 begin
-insert into pmnprocedure( 
-				patid,			encounterid,	enc_type, admit_date, providerid, px, px_type, px_source,px_date) 
-select  distinct fact.patient_num, enc.encounterid,	enc.enc_type, enc.admit_date, 
-		enc.providerid, substring(pr.pcori_basecode,charindex(':',pr.pcori_basecode)+1,11) px, substring(pr.c_fullname,18,2) pxtype, 'NI' px_source,fact.start_date
+
+---------------------------------------
+-- Copied and tweaked from condition_ocurrence procedure 'OMOPDiagnosis'
+---------------------------------------
+-- Optimized to use temp tables, not views. Also removed the distinct for speed.
+select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, pxsource.pcori_basecode dxsource, pxsource.c_fullname
+ into #procedurefact
+from i2b2fact factline
+inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
+inner join PCORNET_PROC pxsource on factline.concept_cd =pxsource.c_basecode  
+where pxsource.c_fullname like '\PCORI\PROCEDURE\%'
+
+---------------------- Old PCORI Columns----------------------------------------------------------
+--				patid,			encounterid,	enc_type, admit_date, providerid, px, px_type, px_source,px_date) 
+---------------------------------------------------------------------------------------------------
+insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_date, procedure_type_concept_id, modifier_concept_id, quantity, provider_id, visit_occurrence_id, procedure_source_value, procedure_source_concept_id, qualifier_source_value) 
+---------------------- Old PCORI values ----------------------------------------------------------------
+--enc.encounterid, fact.patient_num, 	enc.enc_type, enc.admit_date, 
+--		enc.providerid, substring(pr.pcori_basecode,charindex(':',pr.pcori_basecode)+1,11) px, substring(pr.c_fullname,18,2) pxtype, 'NI' px_source,fact.start_date
+--------------------------------------------------------------------------------------------------------------------------
+-- procedure_occurance_id ----------> set to identity column (not shown here)----------------------> Done
+-- person_id -----------------------> patient_num unique identifier for the patient in i2b2--------> Done
+-- procedure_concept_id ------------> i2o_mapping concept_id---------------------------------------> Done
+-- procedure_date ------------------> encounter visit_start_date ----------------------------------> Done
+-- procedure_type_concept_id -------> 44786630 (primary), 44786631 (secondary), 0 (unknown), how do we know the difference??????
+-- modifier_concept_id -------------> (Set to 0 for Data Sprint 2)
+-- quantity ------------------------>  Quantity of procedures done in this visit????? Count of procedures per patient/visit??????
+-- provider_id ---------------------> (Set to 0 for Data Sprint 2)
+-- visit_occurence_id --------------> observation_fact.encounter_num i2b2 id for the encounter (visit)-> Done
+-- procedure_source_value ----------> PCORI base code from ontology -------------------------------> Done
+-- procuedure_source_concept_id ----> OMOP source code from ontology ------------------------------> Done
+-- qualifier_source_value ----------> The source code for the qualifier as it appears in the source data. What is this?????????????
+select  distinct fact.patient_num, isnull(omap.concept_id, '0'), enc.visit_start_date, 0, 0, null, 0, fact.encounter_num, pproc.PCORI_BASECODE, pproc.OMOP_SOURCECODE, null
 from i2b2fact fact
- inner join pmnENCOUNTER enc on enc.patid = fact.patient_num and enc.encounterid = fact.encounter_Num
- inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
-where pr.c_fullname like '\PCORI\PROCEDURE\%'
+---------------------------------------------------------
+-- For every procedure there must be a corresponding visit
+-----------------------------------------------------------
+ inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
+ inner join PCORNET_PROC pproc on pproc.c_basecode = fact.concept_cd
+ inner join i2o_mapping omap on pproc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Procedure'
+-----------------------------------------------------------
+-- look for observation facts that are procedures
+-- Q: Which procedures are primary and which are secondary and which are unknown
+---------- For the moment setting everything unknown
+-----------------------------------------------------------
+left outer join #procedurefact pf
+	on fact.patient_num = pf.patient_num
+	and fact.encounter_num = pf.encounter_num
+	and fact.provider_id = pf.provider_id
+	and fact.concept_cd = pf.concept_cd
+	and fact.start_date = pf.START_DATE
+where pf.c_fullname like '\PCORI\PROCEDURE\%'
 
 end
 go
+
+
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 5. Vitals - v6 by Jeff Klann

@@ -63,9 +63,9 @@ delete from condition_occurrence
 GO
 exec OMOPdiagnosis
 GO
-delete from pmnprocedure
+delete from procedure_occurrence
 GO
-exec PCORNetProcedure
+exec OMOPprocedure
 GO
 delete from pmnvital
 GO
@@ -95,5 +95,3 @@ exec pcornetreport
 GO
 
 select * from i2pReport;
-
-
