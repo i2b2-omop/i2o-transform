@@ -67,17 +67,15 @@ delete from procedure_occurrence
 GO
 exec OMOPprocedure
 GO
-delete from pmnvital
+delete from measurement
 GO
-exec PCORNetVital
+exec omopVital
+GO
+exec omopLabResultCM
 GO
 delete from PMNenrollment
 GO
 exec PCORNetEnroll
-GO
-delete from measurement
-GO
-exec omopLabResultCM
 GO
 delete from pmnprescribing
 GO

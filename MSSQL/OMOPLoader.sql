@@ -641,7 +641,7 @@ GO
 create procedure OMOPvital as
 begin
 -- jgk: I took out admit_date - it doesn't appear in the scheme. Now in SQLServer format - date, substring, name on inner select, no nested with. Added modifiers and now use only pathnames, not codes.
-insert into pmnVITAL(patid, encounterid, measure_date, measure_time,vital_source,ht, wt, diastolic, systolic, original_bmi, bp_position,smoking,tobacco,tobacco_type)
+insert into measurement(person_id, visit_occurrence_id, measurement_date, measurement_time)--pmnVITAL(patid, encounterid, measure_date, measure_time,ht, wt, diastolic, systolic, original_bmi, bp_position,smoking,tobacco,tobacco_type)
 select patid, encounterid, measure_date, measure_time,vital_source,ht, wt, diastolic, systolic, original_bmi, bp_position,smoking,tobacco,
 case when tobacco in ('02','03','04') then -- no tobacco
     case when smoking in ('03','04') then '04' -- no smoking
@@ -654,7 +654,7 @@ case when tobacco in ('02','03','04') then -- no tobacco
   when tobacco in ('NI','OT','UN') and smoking in ('01','02','07','08') then '05'  -- (unknown tobacco w/ smoking) jgk bugfix 12/17/15
  else 'NI' end tobacco_type 
 from
-(select patid, encounterid, measure_date, measure_time, isnull(max(vital_source),'HC') vital_source, -- jgk: not in the spec, so I took it out  admit_date,
+(select patid, encounterid, measure_date, measure_time, --isnull(max(vital_source),'HC') vital_source, -- jgk: not in the spec, so I took it out  admit_date,
 max(ht) ht, max(wt) wt, max(diastolic) diastolic, max(systolic) systolic, 
 max(original_bmi) original_bmi, isnull(max(bp_position),'NI') bp_position,
 isnull(isnull(max(smoking),max(unk_tobacco)),'NI') smoking,
@@ -727,6 +727,46 @@ group by patid, encounterid, measure_date, measure_time, admit_date) y
 end 
 go
 
+----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPvital') AND type in (N'P', N'PC'))
+DROP PROCEDURE OMOPvital
+GO
+
+create procedure OMOPvital as
+begin
+
+
+INSERT INTO dbo.[measurement]
+     ([person_id]--[PATID]
+      ,[visit_occurrence_id]--[ENCOUNTERID]
+      ,[measurement_source_value]--[LAB_LOINC]
+      ,[measurement_date]--[RESULT_DATE]
+      ,[measurement_time]--[RESULT_TIME]
+      ,[value_as_concept_id]--[RESULT_QUAL]
+      ,[value_as_number]--[RESULT_NUM]
+      ,[unit_source_value]--[RESULT_UNIT]
+      ,[value_source_value]--[RAW_RESULT]
+      ,[unit_concept_id]
+      ,[measurement_concept_id]
+      ,[measurement_source_concept_id]
+      ,[measurement_type_concept_id]
+      ,[provider_id])
+
+Select distinct m.patient_num, m.encounter_num, vital.i_loinc, 
+Cast(m.start_date as DATE) meaure_date,   
+CAST(CONVERT(char(5), M.start_date, 108) as TIME) measure_time,
+'0', m.nval_num, m.units_cd, concat (tval_char, nval_num), '0', isnull(vital.omop_sourcecode, '0'), vital.omop_sourcecode,
+'44818701', '0'
+from i2b2fact m
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
+inner join pcornet_vital vital on vital.c_basecode  = m.concept_cd
+where vital.c_fullname like '\PCORI\VITAL\%'
+and vital.i_loinc is not null 
+
+end
+go
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 6. Enrollment - v6 by Jeff Klann
