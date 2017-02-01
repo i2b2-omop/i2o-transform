@@ -122,6 +122,10 @@ Alter Table procedure_occurrence
 Add procedure_occurrence_id Int Identity(1, 1)
 Go
 
+Alter Table measurement
+Add measurement_id Int Identity(1, 1)
+Go
+
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prep-to-transform code
@@ -459,11 +463,11 @@ and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
 select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, --bug fix MJ 10/7/16
-isnull(omap.concept_id, '0'), 
+isnull(diag.omop_basecode, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
     ELSE 38000245 END, 
-end_date, pcori_basecode, diag.omop_sourcecode
+end_date, pcori_basecode, omop_sourcecode
 from i2b2fact factline
 inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
  left outer join #sourcefact sf
@@ -479,17 +483,17 @@ and factline.provider_id=pf.provider_id --bug fix MJ 10/7/16, JK 12/7/16
 and factline.concept_cd=pf.concept_cd
 and factline.start_date=pf.start_Date --bug fix MJ 10/7/16, JK 12/7/16
 inner join pcornet_diag diag on diag.c_basecode  = factline.concept_cd
-inner join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Condition'
 -- Skip ICD-9 V codes in 10 ontology, ICD-9 E codes in 10 ontology, ICD-10 numeric codes in 10 ontology
 -- Note: makes the assumption that ICD-9 Ecodes are not ICD-10 Ecodes; same with ICD-9 V codes. On inspection seems to be true.
 where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
-  ( not ( diag.pcori_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
-  and not ( diag.pcori_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
-  and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.pcori_basecode like '[0-9]%') )) 
+  ( not ( diag.omop_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
+  and not ( diag.omop_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
+  and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.omop_basecode like '[0-9]%') )) 
 --and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
 
 end
 go
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 4. Procedures - v6 by Aaron Abend and Jeff Klann
@@ -720,71 +724,59 @@ inner join pmnENCOUNTER enc on enc.patid = i2b2fact.patient_num and enc.encounte
 inner join pcornet_lab lsource on i2b2fact.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\RESULT_LOC\%'
 
-INSERT INTO dbo.[pmnlabresults_cm]
-      ([PATID]
-      ,[ENCOUNTERID]
-      ,[LAB_NAME]
-      ,[SPECIMEN_SOURCE]
-      ,[LAB_LOINC]
-      ,[PRIORITY]
-      ,[RESULT_LOC]
-      ,[LAB_PX]
-      ,[LAB_PX_TYPE]
-      ,[LAB_ORDER_DATE]
-      ,[SPECIMEN_DATE]
-      ,[SPECIMEN_TIME]
-      ,[RESULT_DATE]
-      ,[RESULT_TIME]
-      ,[RESULT_QUAL]
-      ,[RESULT_NUM]
-      ,[RESULT_MODIFIER]
-      ,[RESULT_UNIT]
-      ,[NORM_RANGE_LOW]
-      ,[NORM_MODIFIER_LOW]
-      ,[NORM_RANGE_HIGH]
-      ,[NORM_MODIFIER_HIGH]
-      ,[ABN_IND]
-      ,[RAW_LAB_NAME]
-      ,[RAW_LAB_CODE]
-      ,[RAW_PANEL]
-      ,[RAW_RESULT]
-      ,[RAW_UNIT]
-      ,[RAW_ORDER_DEPT]
-      ,[RAW_FACILITY_CODE])
+INSERT INTO dbo.[measurement]
+     (,[person_id]--[PATID]
+      ,[visit_occurrence_id]--[ENCOUNTERID]
+      --,[]--[LAB_NAME]
+      --,[]--[SPECIMEN_SOURCE]
+      ,[measurement_source_value]--[LAB_LOINC]
+      --,[]--[PRIORITY]
+      --,[]--[RESULT_LOC]
+      --,[]--[LAB_PX]
+      --,[]--[LAB_PX_TYPE]
+      ,[measurement_date]--[RESULT_DATE]
+      ,[measurement_time]--[RESULT_TIME]
+      ,[value_as_concept_id]--[RESULT_QUAL]
+      ,[value_as_number]--[RESULT_NUM]
+      --,[]--[RESULT_MODIFIER]
+      ,[unit_source_value]--[RESULT_UNIT]
+      ,[range_low]--[NORM_RANGE_LOW]
+      --,[]--[NORM_MODIFIER_LOW]
+      ,[range_high]--[NORM_RANGE_HIGH]
+      --,[]--[NORM_MODIFIER_HIGH]
+      --,[]--[ABN_IND],
+      ,[value_source_value]--[RAW_RESULT]
+      ,[unit_concept_id]
+      ,[measurement_concept_id]
+      ,[measurement_source_concept_id]
+      ,[measurement_type_concept_id]
+      ,[provider_id]
 
 --select max(len(raw_result)),max(len(specimen_time)),max(len(result_time)),max(len(result_unit))
 --max(len(lab_name)),max(len(lab_loinc)),max(len(priority)), max(len(result_loc)), max(len(lab_px)),max(len(result_qual)),max(len(result_num)) 
 
 SELECT DISTINCT  M.patient_num patid,
 M.encounter_num encounterid,
-CASE WHEN ont_parent.C_BASECODE LIKE 'LAB_NAME%' then SUBSTRING (ont_parent.c_basecode,10, 10) ELSE 'NI' END LAB_NAME,
-CASE WHEN lab.pcori_specimen_source like '%or SR_PLS' THEN 'SR_PLS' WHEN lab.pcori_specimen_source is null then 'NI' ELSE lab.pcori_specimen_source END specimen_source, -- (Better way would be to fix the column in the ontology but this will work)
+--CASE WHEN ont_parent.C_BASECODE LIKE 'LAB_NAME%' then SUBSTRING (ont_parent.c_basecode,10, 10) ELSE 'NI' END LAB_NAME,
+--CASE WHEN lab.pcori_specimen_source like '%or SR_PLS' THEN 'SR_PLS' WHEN lab.pcori_specimen_source is null then 'NI' ELSE lab.pcori_specimen_source END specimen_source, -- (Better way would be to fix the column in the ontology but this will work)
 isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
-isnull(p.PRIORITY,'NI') PRIORITY,
-isnull(l.RESULT_LOC,'NI') RESULT_LOC,
-isnull(lab.pcori_basecode, 'NI') LAB_PX,
-'LC'  LAB_PX_TYPE,
-m.start_date LAB_ORDER_DATE, 
-m.start_date SPECIMEN_DATE,
-CAST(CONVERT(char(5), M.start_date, 108) as TIME) SPECIMEN_TIME,
-isnull (m.end_date, m.start_date) RESULT_DATE,   -- Bug fix MJ 10/06/16
+--isnull(p.PRIORITY,'NI') PRIORITY,
+--isnull(l.RESULT_LOC,'NI') RESULT_LOC,
+--isnull(lab.pcori_basecode, 'NI') LAB_PX,
+--'LC'  LAB_PX_TYPE,
+Cast(m.end_date as DATE) RESULT_DATE,   -- Bug fix MJ 10/06/16
 CAST(CONVERT(char(5), M.end_date, 108) as TIME) RESULT_TIME,
-CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE 'NI' END END RESULT_QUAL, -- TODO: Should be a standardized value
+CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
-CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
+--CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
 isnull(m.Units_CD,'NI') RESULT_UNIT, -- TODO: Should be standardized units
-nullif(norm.NORM_RANGE_LOW,'') NORM_RANGE_LOW
-,norm.NORM_MODIFIER_LOW,
-nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH
-,norm.NORM_MODIFIER_HIGH,
-CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
-NULL [RAW_LAB_NAME],
-NULL [RAW_LAB_CODE],
-NULL [RAW_PANEL],
+nullif(norm.NORM_RANGE_LOW,'') NORM_RANGE_LOW,
+--norm.NORM_MODIFIER_LOW,
+nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
+--norm.NORM_MODIFIER_HIGH,
+--CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
-NULL [RAW_UNIT],
-NULL [RAW_ORDER_DEPT],
-NULL [RAW_FACILITY_CODE]
+m.units_cd, ont_loinc.omop_sourcecode, ont_loinc.omop_sourcecode, '44818702', m.providerid
 
 
 FROM i2b2fact M   --JK bug fix 10/7/16
@@ -811,8 +803,8 @@ and M.provider_id=l.provider_id
 and M.concept_cd=l.concept_Cd
 and M.start_date=l.start_Date
  
-WHERE m.ValType_Cd in ('N','T')
-and ont_parent.C_BASECODE LIKE 'LAB_NAME%' -- Exclude non-pcori labs
+WHERE m.ValType_Cd in ('N') -- excluding non-numerical measurementss
+--sand ont_parent.C_BASECODE LIKE 'LAB_NAME%' -- Exclude non-pcori labs
 and m.MODIFIER_CD='@'
 
 END
