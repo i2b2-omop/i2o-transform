@@ -103,10 +103,62 @@ GO
 
 
 ----------------------------------------------------------------------------------------------------------------------------------------
--- CREATE THE TABLES - note that all tables have changed since v5
+-- ALTER THE TABLES - note that all tables have changed since v5
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Download SQL to create the tables from https://github.com/OHDSI/CommonDataModel
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PMN_LabNormal]') AND type in (N'U'))
+DROP TABLE [dbo].[PMN_LabNormal]
+GO
+-- Lab Normal ranges table
+CREATE TABLE [dbo].[PMN_LabNormal]  ( 
+	[LAB_NAME]          	varchar(150) NULL,
+	[NORM_RANGE_LOW]    	varchar(10) NULL,
+	[NORM_MODIFIER_LOW] 	varchar(2) NULL,
+	[NORM_RANGE_HIGH]   	varchar(10) NULL,
+	[NORM_MODIFIER_HIGH]	varchar(2) NULL 
+	)
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:LDL', '0', 'GE', '165', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:A1C', '', 'NI', '', 'NI')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:CK', '50', 'GE', '236', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:CK_MB', '', 'NI', '', 'NI')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:CK_MBI', '', 'NI', '', 'NI')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:CREATININE', '0', 'GE', '1.6', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:CREATININE', '0', 'GE', '1.6', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:HGB', '12', 'GE', '17.5', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:INR', '0.8', 'GE', '1.3', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:TROP_I', '0', 'GE', '0.49', 'LE')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:TROP_T_QL', '', 'NI', '', 'NI')
+GO
+INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
+  VALUES('LAB_NAME:TROP_T_QN', '0', 'GE', '0.09', 'LE')
+GO
+
+
+
 
 Alter Table condition_occurrence Drop Column condition_occurrence_id
 Go
@@ -715,18 +767,18 @@ begin
 -- Optimized to use temp tables; also, removed "distinct" - much faster and seems unnecessary - 12/9/15
 select patient_num, encounter_num, provider_id, concept_cd, start_date, lsource.pcori_basecode  PRIORITY 
 into #priority from i2b2fact
-inner join pmnENCOUNTER enc on enc.patid = i2b2fact.patient_num and enc.encounterid = i2b2fact.encounter_Num
+inner join visit_occurrence enc on enc.patid = i2b2fact.patient_num and enc.encounterid = i2b2fact.encounter_Num
 inner join pcornet_lab lsource on i2b2fact.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\PRIORITY\%'
  
 select  patient_num, encounter_num, provider_id, concept_cd, start_date, lsource.pcori_basecode  RESULT_LOC
 into #location from i2b2fact
-inner join pmnENCOUNTER enc on enc.patid = i2b2fact.patient_num and enc.encounterid = i2b2fact.encounter_Num
+inner join visit_occurrence enc on enc.patid = i2b2fact.patient_num and enc.encounterid = i2b2fact.encounter_Num
 inner join pcornet_lab lsource on i2b2fact.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\RESULT_LOC\%'
 
 INSERT INTO dbo.[measurement]
-     (,[person_id]--[PATID]
+     ([person_id]--[PATID]
       ,[visit_occurrence_id]--[ENCOUNTERID]
       --,[]--[LAB_NAME]
       --,[]--[SPECIMEN_SOURCE]
@@ -751,7 +803,7 @@ INSERT INTO dbo.[measurement]
       ,[measurement_concept_id]
       ,[measurement_source_concept_id]
       ,[measurement_type_concept_id]
-      ,[provider_id]
+      ,[provider_id])
 
 --select max(len(raw_result)),max(len(specimen_time)),max(len(result_time)),max(len(result_unit))
 --max(len(lab_name)),max(len(lab_loinc)),max(len(priority)), max(len(result_loc)), max(len(lab_px)),max(len(result_qual)),max(len(result_num)) 
@@ -777,15 +829,16 @@ nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
-m.units_cd, ont_loinc.omop_sourcecode, ont_loinc.omop_sourcecode, '44818702', m.providerid
+m.units_cd, omap.concept_id, ont_loinc.omop_sourcecode, '44818702', m.providerid
 
 
 FROM i2b2fact M   --JK bug fix 10/7/16
-inner join pmnENCOUNTER enc on enc.patid = m.patient_num and enc.encounterid = m.encounter_Num -- Constraint to selected encounters
+inner join visit_occurrence enc on enc.patid = m.patient_num and enc.encounterid = m.encounter_Num -- Constraint to selected encounters
 inner join pcornet_lab lab on lab.c_basecode  = M.concept_cd and lab.c_fullname like '\PCORI\LAB_RESULT_CM\%'
 inner join pcornet_lab ont_loinc on lab.pcori_basecode=ont_loinc.pcori_basecode and ont_loinc.c_basecode like 'LOINC:%' --NOTE: You will need to change 'LOINC:' to our local term.
 inner JOIN pcornet_lab ont_parent on ont_loinc.c_path=ont_parent.c_fullname
-inner join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+inner join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Measurement'
+left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
 
 
 LEFT OUTER JOIN

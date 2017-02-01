@@ -75,9 +75,9 @@ delete from PMNenrollment
 GO
 exec PCORNetEnroll
 GO
-delete from pmnlabresults_cm
+delete from measurement
 GO
-exec PCORNetLabResultCM
+exec omopLabResultCM
 GO
 delete from pmnprescribing
 GO
