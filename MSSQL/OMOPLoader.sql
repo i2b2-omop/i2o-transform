@@ -174,6 +174,9 @@ Alter Table procedure_occurrence
 Add procedure_occurrence_id Int Identity(1, 1)
 Go
 
+Alter Table measurement Drop Column measurement_id
+Go
+
 Alter Table measurement
 Add measurement_id Int Identity(1, 1)
 Go
@@ -765,16 +768,16 @@ create procedure OMOPlabResultCM as
 begin
 
 -- Optimized to use temp tables; also, removed "distinct" - much faster and seems unnecessary - 12/9/15
-select patient_num, encounter_num, provider_id, concept_cd, start_date, lsource.pcori_basecode  PRIORITY 
-into #priority from i2b2fact
-inner join visit_occurrence enc on enc.patid = i2b2fact.patient_num and enc.encounterid = i2b2fact.encounter_Num
-inner join pcornet_lab lsource on i2b2fact.modifier_cd =lsource.c_basecode
+select patient_num, encounter_num, m.provider_id, concept_cd, start_date, lsource.pcori_basecode  PRIORITY 
+into #priority from i2b2fact M
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
+inner join pcornet_lab lsource on m.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\PRIORITY\%'
  
-select  patient_num, encounter_num, provider_id, concept_cd, start_date, lsource.pcori_basecode  RESULT_LOC
-into #location from i2b2fact
-inner join visit_occurrence enc on enc.patid = i2b2fact.patient_num and enc.encounterid = i2b2fact.encounter_Num
-inner join pcornet_lab lsource on i2b2fact.modifier_cd =lsource.c_basecode
+select  patient_num, encounter_num, m.provider_id, concept_cd, start_date, lsource.pcori_basecode  RESULT_LOC
+into #location from i2b2fact M
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
+inner join pcornet_lab lsource on m.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\RESULT_LOC\%'
 
 INSERT INTO dbo.[measurement]
@@ -817,8 +820,8 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --isnull(l.RESULT_LOC,'NI') RESULT_LOC,
 --isnull(lab.pcori_basecode, 'NI') LAB_PX,
 --'LC'  LAB_PX_TYPE,
-Cast(m.end_date as DATE) RESULT_DATE,   -- Bug fix MJ 10/06/16
-CAST(CONVERT(char(5), M.end_date, 108) as TIME) RESULT_TIME,
+Cast(m.start_date as DATE) RESULT_DATE,   -- Bug fix MJ 10/06/16
+CAST(CONVERT(char(5), M.start_date, 108) as TIME) RESULT_TIME,
 CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
@@ -829,15 +832,15 @@ nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
-m.units_cd, omap.concept_id, ont_loinc.omop_sourcecode, '44818702', m.providerid
+'0', omap.concept_id, ont_loinc.omop_sourcecode, '44818702', '0'
 
 
 FROM i2b2fact M   --JK bug fix 10/7/16
-inner join visit_occurrence enc on enc.patid = m.patient_num and enc.encounterid = m.encounter_Num -- Constraint to selected encounters
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
 inner join pcornet_lab lab on lab.c_basecode  = M.concept_cd and lab.c_fullname like '\PCORI\LAB_RESULT_CM\%'
 inner join pcornet_lab ont_loinc on lab.pcori_basecode=ont_loinc.pcori_basecode and ont_loinc.c_basecode like 'LOINC:%' --NOTE: You will need to change 'LOINC:' to our local term.
 inner JOIN pcornet_lab ont_parent on ont_loinc.c_path=ont_parent.c_fullname
-inner join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Measurement'
+inner join i2o_mapping omap on ont_loinc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Measurement'
 left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
 
 
