@@ -86,7 +86,9 @@ and c2.invalid_reason is null
 and c2.domain_id='Measurement'
 
 -- Create a units_cd conversion table
-select c1 units_name,isnull(concept1,concept2) concept_id,s2 standard_concept
+drop table i2o_unitsmap
+GO
+select c1 units_name,isnull(concept2,concept1) concept_id,s2 standard_concept
  into i2o_unitsmap
 from
 (select distinct c.concept_name c1,c.concept_id concept1,c.standard_concept s1,c2.concept_name c2,c2.concept_id concept2,c2.standard_concept s2 from concept c 
@@ -96,6 +98,7 @@ where c.domain_id='Unit'
 and (c2.vocabulary_id='UCUM' or c2.vocabulary_id is null) and 
       (c2.standard_concept='S' or c2.standard_concept is null) and 
       (c2.domain_id='Unit' or c2.domain_id is null)) x
+Go
 
 -- Now, vitals! These all map to standard codes so we don't use the omop_mapping table
 update p set omop_sourcecode=concept_id
