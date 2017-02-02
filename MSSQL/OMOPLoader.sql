@@ -757,11 +757,12 @@ INSERT INTO dbo.[measurement]
 Select distinct m.patient_num, m.encounter_num, vital.i_loinc, 
 Cast(m.start_date as DATE) meaure_date,   
 CAST(CONVERT(char(5), M.start_date, 108) as TIME) measure_time,
-'0', m.nval_num, m.units_cd, concat (tval_char, nval_num), '0', isnull(vital.omop_sourcecode, '0'), vital.omop_sourcecode,
+'0', m.nval_num, m.units_cd, concat (tval_char, nval_num), u.concept_id, isnull(vital.omop_sourcecode, '0'), vital.omop_sourcecode,
 '44818701', '0'
 from i2b2fact m
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
 inner join pcornet_vital vital on vital.c_basecode  = m.concept_cd
+left outer join i2o_unitsmap u on u.units_name=m.units_cd
 where vital.c_fullname like '\PCORI\VITAL\%'
 and vital.i_loinc is not null 
 
@@ -872,7 +873,7 @@ nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
-'0', omap.concept_id, ont_loinc.omop_sourcecode, '44818702', '0'
+u.concept_id, omap.concept_id, ont_loinc.omop_sourcecode, '44818702', '0'
 
 
 FROM i2b2fact M   --JK bug fix 10/7/16
@@ -882,6 +883,7 @@ inner join pcornet_lab ont_loinc on lab.pcori_basecode=ont_loinc.pcori_basecode 
 inner JOIN pcornet_lab ont_parent on ont_loinc.c_path=ont_parent.c_fullname
 inner join i2o_mapping omap on ont_loinc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Measurement'
 left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+left outer join i2o_unitsmap u on u.units_name=m.units_cd
 
 
 LEFT OUTER JOIN
