@@ -648,14 +648,15 @@ INSERT INTO dbo.[measurement]
       ,[measurement_concept_id]
       ,[measurement_source_concept_id]
       ,[measurement_type_concept_id]
-      ,[provider_id])
+      ,[provider_id]
+      ,[operator_concept_id])
 
 Select distinct m.patient_num, m.encounter_num, vital.i_loinc, 
 Cast(m.start_date as DATE) meaure_date,   
 CAST(CONVERT(char(5), M.start_date, 108) as TIME) measure_time,
 '0', m.nval_num, m.units_cd, concat (tval_char, nval_num), 
 isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
-'44818701', '0'
+'44818701', '0', '0'
 from i2b2fact m
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
 inner join pcornet_vital vital on vital.c_basecode  = m.concept_cd
@@ -744,7 +745,8 @@ INSERT INTO dbo.[measurement]
       ,[measurement_concept_id]
       ,[measurement_source_concept_id]
       ,[measurement_type_concept_id]
-      ,[provider_id])
+      ,[provider_id]
+      ,[operator_concept_id])
 
 --select max(len(raw_result)),max(len(specimen_time)),max(len(result_time)),max(len(result_unit))
 --max(len(lab_name)),max(len(lab_loinc)),max(len(priority)), max(len(result_loc)), max(len(lab_px)),max(len(result_qual)),max(len(result_num)) 
@@ -760,7 +762,7 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --'LC'  LAB_PX_TYPE,
 Cast(m.start_date as DATE) RESULT_DATE,   -- Bug fix MJ 10/06/16
 CAST(CONVERT(char(5), M.start_date, 108) as TIME) RESULT_TIME,
-CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END ELSE 0 END RESULT_QUAL, -- TODO: Should be a standardized value
+isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END, '0') RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
 isnull(m.Units_CD,'NI') RESULT_UNIT, -- TODO: Should be standardized units
@@ -770,7 +772,7 @@ nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
-isnull(u.concept_id, '0'), isnull(omap.concept_id, '0'), isnull(ont_loinc.omop_sourcecode, '0'), '44818702', '0'
+isnull(u.concept_id, '0'), isnull(omap.concept_id, '0'), isnull(ont_loinc.omop_sourcecode, '0'), '44818702', '0', '0'
 
 
 FROM i2b2fact M   --JK bug fix 10/7/16
