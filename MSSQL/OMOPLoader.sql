@@ -623,112 +623,8 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 5. Vitals - v6 by Jeff Klann
--- TODO: This version does not do unit conversions.
-----------------------------------------------------------------------------------------------------------------------------------------
-------------------------- Vitals Code ------------------------------------------------ 
--- Written by Jeff Klann, PhD
--- Borrows heavily from GPC's CDM_transform.sql by Dan Connolly and Nathan Graham, available at https://bitbucket.org/njgraham/pcori-annotated-data-dictionary/overview 
--- This transform must be run after demographics and encounters. It does not rely on the PCORI_basecode column except for tobacco and smoking status, so that does not need to be changed.
--- v6 now supports CDM v3 (smoking and tobacco transforms)
--- v0.6.4 now correctly merges modifiers
--- TODO: This does not do unit conversions.
-
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPvital') AND type in (N'P', N'PC'))
-DROP PROCEDURE OMOPvital
-GO
-
-create procedure OMOPvital as
-begin
--- jgk: I took out admit_date - it doesn't appear in the scheme. Now in SQLServer format - date, substring, name on inner select, no nested with. Added modifiers and now use only pathnames, not codes.
-insert into measurement(person_id, visit_occurrence_id, measurement_date, measurement_time)--pmnVITAL(patid, encounterid, measure_date, measure_time,ht, wt, diastolic, systolic, original_bmi, bp_position,smoking,tobacco,tobacco_type)
-select patid, encounterid, measure_date, measure_time,vital_source,ht, wt, diastolic, systolic, original_bmi, bp_position,smoking,tobacco,
-case when tobacco in ('02','03','04') then -- no tobacco
-    case when smoking in ('03','04') then '04' -- no smoking
-        when smoking in ('01','02','07','08') then '01' -- smoking
-        else 'NI' end -- (no tobacco, unknown smoking)
- when tobacco='01' then -- tobacco
-    case when smoking in ('03','04') then '02' -- no smoking
-        when smoking in ('01','02','07','08') then '03' -- smoking
-        else 'OT' end -- (tobacco, unknown smoking)
-  when tobacco in ('NI','OT','UN') and smoking in ('01','02','07','08') then '05'  -- (unknown tobacco w/ smoking) jgk bugfix 12/17/15
- else 'NI' end tobacco_type 
-from
-(select patid, encounterid, measure_date, measure_time, --isnull(max(vital_source),'HC') vital_source, -- jgk: not in the spec, so I took it out  admit_date,
-max(ht) ht, max(wt) wt, max(diastolic) diastolic, max(systolic) systolic, 
-max(original_bmi) original_bmi, isnull(max(bp_position),'NI') bp_position,
-isnull(isnull(max(smoking),max(unk_tobacco)),'NI') smoking,
-isnull(isnull(max(tobacco),max(unk_tobacco)),'NI') tobacco
-from (
-  select vit.patid, vit.encounterid, vit.measure_date, vit.measure_time 
-    , case when vit.pcori_code like '\PCORI\VITAL\HT%' then vit.nval_num*(dbo.unit_ht()) else null end ht -- unit_ht() converts from centimeters to inches
-    , case when vit.pcori_code like '\PCORI\VITAL\WT%' then vit.nval_num*(dbo.unit_wt()) else null end wt -- unit_wt() converts from kilograms to pounds
-    , case when vit.pcori_code like '\PCORI\VITAL\BP\DIASTOLIC%' then vit.nval_num else null end diastolic
-    , case when vit.pcori_code like '\PCORI\VITAL\BP\SYSTOLIC%' then vit.nval_num else null end systolic
-    , case when vit.pcori_code like '\PCORI\VITAL\ORIGINAL_BMI%' then vit.nval_num else null end original_bmi
-    , case when vit.pcori_code like '\PCORI_MOD\BP_POSITION\%' then substring(vit.pcori_code,len(vit.pcori_code)-2,2) else null end bp_position
-    , case when vit.pcori_code like '\PCORI_MOD\VITAL_SOURCE\%' then substring(vit.pcori_code,len(vit.pcori_code)-2,2) else null end vital_source
-    , case when vit.pcori_code like '\PCORI\VITAL\TOBACCO\02\%' then vit.pcori_basecode else null end tobacco
-    , case when vit.pcori_code like '\PCORI\VITAL\TOBACCO\SMOKING\%' then vit.pcori_basecode else null end smoking
-    , case when vit.pcori_code like '\PCORI\VITAL\TOBACCO\__\%' then vit.pcori_basecode else null end unk_tobacco
-    , enc.admit_date
-  from pmndemographic pd
-  left join (
- -- Begin gather facts and modifier facts
-      select patient_num patid, encounter_num encounterid, 
-      	substring(convert(varchar,start_Date,20),1,10) measure_date, 
-	substring(convert(varchar,start_Date,20),12,5) measure_time, 
-      nval_num, pcori_basecode, pcori_code from
-    (select obs.patient_num, obs.encounter_num, obs.start_Date, nval_num, pcori_basecode, codes.pcori_code
-    from i2b2fact obs
-    inner join (select c_basecode concept_cd, c_fullname pcori_code, pcori_basecode
-      from (
-        select '\PCORI\VITAL\BP\DIASTOLIC\' concept_path 
-        union all
-        select '\PCORI\VITAL\BP\SYSTOLIC\' concept_path 
-        union all
-        select '\PCORI\VITAL\HT\' concept_path
-        union all
-        select '\PCORI\VITAL\WT\' concept_path
-        union all
-        select '\PCORI\VITAL\ORIGINAL_BMI\' concept_path
-        union all
-        select '\PCORI\VITAL\TOBACCO\' concept_path
-        ) bp, pcornet_vital pm
-      where pm.c_fullname like bp.concept_path + '%'
-      ) codes on (codes.concept_cd = obs.concept_cd) 
-      UNION ALL
-    select obs.patient_num, obs.encounter_num, obs.start_Date, nval_num, pcori_basecode, codes.pcori_code
-    from i2b2fact obs
-    inner join (select c_basecode concept_cd, c_fullname pcori_code, pcori_basecode
-      from (
-        select '\PCORI_MOD\BP_POSITION\' concept_path
-        union all
-        select '\PCORI_MOD\VITAL_SOURCE\' concept_path
-        ) bp, pcornet_vital pm
-      where pm.c_fullname like bp.concept_path + '%'
-     ) codes on (codes.concept_cd = obs.modifier_cd)
-     )fx
--- End gather facts and modifier facts
-    ) vit on vit.patid = pd.patid    
-  join pmnencounter enc on enc.encounterid = vit.encounterid
-  ) x
-where ht is not null 
-  or wt is not null 
-  or diastolic is not null 
-  or systolic is not null 
-  or original_bmi is not null
-  or bp_position is not null
-  or vital_source is not null
-  or smoking is not null
-  or tobacco is not null
-group by patid, encounterid, measure_date, measure_time, admit_date) y
-
-end 
-go
-
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
+------------------------- Vitals ------------------------------------------------ 
+-- Written by Jeff Klann, PhD, and Matthew Joss
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPvital') AND type in (N'P', N'PC'))
 DROP PROCEDURE OMOPvital
@@ -757,7 +653,8 @@ INSERT INTO dbo.[measurement]
 Select distinct m.patient_num, m.encounter_num, vital.i_loinc, 
 Cast(m.start_date as DATE) meaure_date,   
 CAST(CONVERT(char(5), M.start_date, 108) as TIME) measure_time,
-'0', m.nval_num, m.units_cd, concat (tval_char, nval_num), u.concept_id, isnull(vital.omop_sourcecode, '0'), vital.omop_sourcecode,
+'0', m.nval_num, m.units_cd, concat (tval_char, nval_num), 
+isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
 '44818701', '0'
 from i2b2fact m
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
@@ -873,7 +770,7 @@ nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
-u.concept_id, omap.concept_id, ont_loinc.omop_sourcecode, '44818702', '0'
+isnull(u.concept_id, '0'), isnull(omap.concept_id, '0'), isnull(ont_loinc.omop_sourcecode, '0'), '44818702', '0'
 
 
 FROM i2b2fact M   --JK bug fix 10/7/16
