@@ -21,7 +21,7 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Change to your pmn database
-use i2b2demodata
+use PMI
 go
 
 -- drop any existing synonyms
@@ -842,9 +842,9 @@ GO
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
 -- TODO: The first encounter inner join seems to slow things down
 
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOP_drug_exposure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprescribing;
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdrug_exposure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdrug_exposure;
 GO
-create procedure OMOP_drug_exposure as
+create procedure OMOPdrug_exposure as
 begin
 select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, pxsource.pcori_basecode dxsource, pxsource.c_fullname
  into #procedurefact
@@ -855,7 +855,7 @@ where pxsource.c_fullname like '\PCORI\PROCEDURE\%'
 
 
 -- Griffin's optimization: use temp tables rather than left joining directly - 12/9/15
-    select pcori_basecode,c_fullname,instance_num,start_date,provider_id,concept_cd,encounter_num,modifier_cd
+    select pcori_basecode,c_fullname,instance_num,start_date,basis.provider_id,concept_cd,encounter_num,modifier_cd
 		into #basis
 		from i2b2fact basis
 			inner join visit_occurrence enc on enc.person_id = basis.patient_num and enc.visit_occurrence_id = basis.encounter_Num
@@ -863,91 +863,72 @@ where pxsource.c_fullname like '\PCORI\PROCEDURE\%'
 			on basis.modifier_cd = basiscode.c_basecode
 			and basiscode.c_fullname like '\PCORI_MOD\RX_BASIS\%'
 
-    select pcori_basecode,instance_num,start_date,provider_id,concept_cd,encounter_num,modifier_cd 
+    select pcori_basecode,instance_num,start_date,freq.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #freq
 		from i2b2fact freq
-			inner join visit_occurrence enc on enc.patid = freq.patient_num and enc.visit_occurrence_id = freq.encounter_Num
+			inner join visit_occurrence enc on enc.person_id = freq.patient_num and enc.visit_occurrence_id = freq.encounter_Num
 		 join pcornet_med freqcode 
 			on freq.modifier_cd = freqcode.c_basecode
 			and freqcode.c_fullname like '\PCORI_MOD\RX_FREQUENCY\%'
 
-    select nval_num,instance_num,start_date,provider_id,concept_cd,encounter_num,modifier_cd
+    select nval_num,instance_num,start_date,quantity.provider_id,concept_cd,encounter_num,modifier_cd
 		into #quantity
 		from i2b2fact quantity
-			inner join visit_occurrence enc on enc.patid = quantity.patient_num and enc.visit_occurrence_id = quantity.encounter_Num
+			inner join visit_occurrence enc on enc.person_id = quantity.patient_num and enc.visit_occurrence_id = quantity.encounter_Num
 		 join pcornet_med quantitycode 
 			on quantity.modifier_cd = quantitycode.c_basecode
 			and quantitycode.c_fullname like '\PCORI_MOD\RX_QUANTITY\'
 
-	select nval_num,instance_num,start_date,provider_id,concept_cd,encounter_num,modifier_cd 
+	select nval_num,instance_num,start_date,refills.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #refills
 		from i2b2fact refills
-			inner join visit_occurrence enc on enc.patid = refills.patient_num and enc.visit_occurrence_id = refills.encounter_Num
+			inner join visit_occurrence enc on enc.person_id = refills.patient_num and enc.visit_occurrence_id = refills.encounter_Num
 		 join pcornet_med refillscode 
 			on refills.modifier_cd = refillscode.c_basecode
 			and refillscode.c_fullname like '\PCORI_MOD\RX_REFILLS\'
 
-    select nval_num,instance_num,start_date,provider_id,concept_cd,encounter_num,modifier_cd 
+    select nval_num,instance_num,start_date,supply.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #supply
 		from i2b2fact supply
-			inner join visit_occurrence enc on enc.patid = supply.patient_num and enc.visit_occurrence_id = supply.encounter_Num
+			inner join visit_occurrence enc on enc.person_id = supply.patient_num and enc.visit_occurrence_id = supply.encounter_Num
 		 join pcornet_med supplycode 
 			on supply.modifier_cd = supplycode.c_basecode
 			and supplycode.c_fullname like '\PCORI_MOD\RX_DAYS_SUPPLY\'
 
 -- insert data with outer joins to ensure all records are included even if some data elements are missing
 insert into drug_exposure(
------------------------------OLD PCORI COLUMNS--------------------------------------------
---	PATID
---    ,encounterid
---    ,RX_PROVIDERID
---	,RX_ORDER_DATE -- using start_date from i2b2
---	,RX_ORDER_TIME  -- using time start_date from i2b2
---	,RX_START_DATE
---	,RX_END_DATE 
---    ,RXNORM_CUI --using pcornet_med pcori_cui - new column!
---    ,RX_QUANTITY ---- modifier nval_num
---    ,RX_REFILLS  -- modifier nval_num
---    ,RX_DAYS_SUPPLY -- modifier nval_num
---    ,RX_FREQUENCY --modifier with basecode lookup
---    ,RX_BASIS --modifier with basecode lookup
-----    ,RAW_RX_MED_NAME, --not filling these right now
-----    ,RAW_RX_FREQUENCY,
-----    ,RAW_RXNORM_CUI
--------------------------------------------------------------------------------------------
--- drug_exposure_id ----------------> set to identity column (not shown here)----------------------> Done
+-- drug_exposure_id -------- --------> set to identity column (not shown here)----------------------> Done
 person_id   -----------------------> patient_num unique identifier for the patient in i2b2--------> Done
-, drug_source_concept_id -------------> i2o_mapping concept_id---------------------------------------> Done
+, drug_concept_id -------------> i2o_mapping concept_id---------------------------------------> Done
 , drug_exposure_start_date --------> i2b2fact visit_start_date ----------------------------------> Done
 , drug_exposure_start_datetime -----> i2b2fact visit_start_date ---------------------------------> Done
 , drug_exposure_end_date  -----------> i2b2fact end_end ------------------------------------> Done
-, drug_exposure_end_datatime  ----------->  i2b2fact end_end --------------------------------> Done
--- drug_type_concept_id -------> physician admistered, prescription, Inpatient... how do we know the difference??????
--- stop_reason ------------------> Reason the drug was stoppped varchar(20) ... Do we have this?????
-, refills   --------------------------> from ontology \PCORI_MOD\RX_REFILLS\
-, quantity	--------------------------> from ontology \PCORI_MOD\RX_QUANTITY
-, days_supply	--------------------------> from ontology \PCORI_MOD\RX_DAYS_SUPPLY
--- sig----------------------------> The directions "signetur" on the Drug prescription as recorded in the original prescription or dispensing record
--- route_concept_id ---------------> routes of administrating medication oral, intravenous, etc... Do we have this????
--- effective_drug_dose ------------> Numerical Value of Drug dose for this DrugjExposure... Do we have this????
--- dose_unit_concept_id -----------> UCUM Codes concpet c where c.vocabulary_id = 'UCUM and c.standard_concept='S' and c.domain_id='Unit'
--- lot_number ----------------------> varchar... do we have this value???
--- provider_id ---------------------> (Set to 0 for Data Sprint 2)
-visit_occurence_id -----------------> observation_fact.encounter_num i2b2 id for the encounter (visit)-> Done
--- drug_source_value ----------> PCORI base code from ontology preffered vocabularies RxNorm, NDC, CVX, or the name, do we have this??? --->
--- drug_source_concept_id ----> OMOP source code from ontology  do we have this mapping????
--- route_source_value ----------> Varchar ....Do we have this???? 
--- dose_unit_source_value ----------> Varchar .....Do we have this??????
+, drug_exposure_end_datetime  ----------->  i2b2fact end_end --------------------------------> Done
+, drug_type_concept_id -------> physician admistered, prescription, Inpatient... how do we know the difference?----This is a modifier called event \PCORI_MOD\RX_BASIS\DI and RX_BASIS\PR----> NOT DONE
+, stop_reason ------------------> Reason the drug was stoppped varchar(20) ... Do we have this?---> NO
+, refills   --------------------------> from ontology \PCORI_MOD\RX_REFILLS\ ----------------> Done
+, quantity	--------------------------> from ontology \PCORI_MOD\RX_QUANTITY ----------------> Done
+, days_supply	--------------------------> from ontology \PCORI_MOD\RX_DAYS_SUPPLY ----------> Done
+, sig----------------------------> The directions "signetur" on the Drug prescription as recorded in the original prescription or dispensing record -- Passing the frequency---> Done
+, route_concept_id ---------------> routes of administrating medication oral, intravenous, etc... Need a mapping ---------------------------> NOT DONE
+, effective_drug_dose ------------> Numerical Value of Drug dose for this Drug_Exposure... Do we have this? --> No 
+, dose_unit_concept_id -----------> UCUM Codes concpet c where c.vocabulary_id = 'UCUM and c.standard_concept='S' and c.domain_id='Unit'----> NOT DONE
+, lot_number ----------------------> varchar... do we have this value?------------------------> No
+, provider_id ---------------------> (Set to 0 for Data Sprint 2)-----------------------------> Done
+, visit_occurrence_id -----------------> observation_fact.encounter_num i2b2 id for the encounter (visit)-> Done
+, drug_source_value ----------> PCORI base code from ontology preffered vocabularies RxNorm, NDC, CVX, or the name, do we have this? ---> Use the base_code which NDC or RXNorm ---> Done
+, drug_source_concept_id ----> OMOP source code from ontology  do we have this mapping?-------> NOT DONE
+, route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
+, dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
---------------------------------------------------Old PCori values--------------------------------------------------------------------------------------
---select distinct  m.patient_num, m.Encounter_Num,m.provider_id,  m.start_date order_date,  substring(convert(varchar,m.start_date,8),1,5), m.start_date start_date, m.end_date, mo.pcori_cui
---    ,quantity.nval_num quantity, refills.nval_num refills, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency, substring(basis.pcori_basecode,charindex(':',basis.pcori_basecode)+1,2) basis
--------------------------------------------------------------------------------------------------------------------------------------------------------
-select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as time), m.end_date, cast(m.end_date as time), refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, m.Encounter_num
+select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as time), m.end_date, cast(m.end_date as time), 1, null
+, refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
+, null, null, null, null
+, 0, m.Encounter_num, mo.C_BASECODE, null, null, null
  from i2b2fact m
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
- inner join i2o_mapping omap on mo.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Drug Exposure'
+ inner join i2o_mapping omap on mo.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Drug'
 
 -- TODO: This join adds several minutes to the load - must be debugged
 
