@@ -77,9 +77,9 @@ delete from PMNenrollment
 GO
 exec PCORNetEnroll
 GO
-delete from pmnprescribing
+delete from drug_exposure
 GO
-exec PCORNetPrescribing
+exec OMOPdrug_exposure
 GO
 delete from pmndispensing
 GO

@@ -921,10 +921,10 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
-select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as time), m.end_date, cast(m.end_date as time), 1, null
+select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as time), m.end_date, cast(m.end_date as time), '0', null
 , refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
 , null, null, null, null
-, 0, m.Encounter_num, mo.C_BASECODE, null, null, null
+, 0, m.Encounter_num, mo.C_BASECODE, null, null, units_cd
  from i2b2fact m
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
