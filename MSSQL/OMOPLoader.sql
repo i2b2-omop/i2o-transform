@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- OMOPLoader Script
+-- OMOPLoader Script for OMOP v5.1
 -- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres
 -- Version now managed by changelog. Last update 12/7/16@6pm
 -- NOT NEARLY FINISHED! FOR DEVELOPERS ONLY!
@@ -63,7 +63,7 @@ create synonym pcornet_demo for PMI..pcornet_demo
 GO
 create synonym pcornet_proc for PMI..pcornet_proc
 GO
-create synonym pcornet_vital for PMI..pcornet_vital
+create synonym pcornet_vital for PMI..pcornet_vital_30
 GO
 create synonym pcornet_enc for PMI..pcornet_enc_15
 GO
@@ -297,7 +297,7 @@ DECLARE @sqltext NVARCHAR(4000);
 DECLARE @batchid numeric
 declare getsql cursor local for 
 --1 --  S,R,NH
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+ --person(raw_sex,PATID, BIRTH_DATE, BIRTH_TIME,SEX, HISPANIC, RACE) 
 	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':'+race.c_name+''',p.race_cd+'':Unknown'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -316,7 +316,7 @@ declare getsql cursor local for
 	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union -- A - S,R,H
-select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':'+race.c_name+''',p.race_cd+'':'+hisp.c_name+''',patient_num, '+ --'	select p.sex_cd+'':''+sex.c_name,p.race_cd+'':''+race.c_name,p.race_cd+'':''+hisp.c_name,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -338,7 +338,7 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':Unknown'',p.race_cd+'':Unknown'',patient_num, '+ --'	select p.sex_cd,p.race_cd,p.race_cd,patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -355,7 +355,7 @@ union --2 S, nR, nH
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd,p.race_cd+'':'+race.c_name+''',p.race_cd+'':Unknown'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -372,7 +372,7 @@ union --3 -- nS,R, NH
 	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
 	and race.c_visualattributes like 'L%'
 union --B -- nS,R, H
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd,p.race_cd+'':'+race.c_name+''',p.race_cd+'':'+hisp.c_name+''',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -392,7 +392,7 @@ union --B -- nS,R, H
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
 union --4 -- S, NR, H
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd+'':'+sex.c_name+''',p.race_cd+'':Unknown'',p.race_cd+'':Hispanic'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -409,7 +409,7 @@ union --4 -- S, NR, H
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
 	and sex.c_visualattributes like 'L%'
 union --5 -- NS, NR, H
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd,p.race_cd+'':Unknown'',p.race_cd+'':Hispanic'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -423,7 +423,7 @@ union --5 -- NS, NR, H
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 union --6 -- NS, NR, nH
-	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,time_of_birth,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
+	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd,p.race_cd+'':Unknown'',p.race_cd+'':Unknown'',patient_num, '+
 	'	year(birth_date), '+
     '	month(birth_date), '+
@@ -474,8 +474,8 @@ create procedure OMOPencounter as
 DECLARE @sqltext NVARCHAR(4000);
 begin
 
-insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visit_start_time, 
-		visit_end_date,visit_end_time,provider_id,  
+insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visit_start_datetime, 
+		visit_end_date,visit_end_datetime,provider_id,  
 		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
 select distinct v.patient_num, v.encounter_num,  
 	start_Date, 
@@ -523,13 +523,13 @@ inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.
 inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
-insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
+insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
 select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, --bug fix MJ 10/7/16
 isnull(omap.concept_id, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
     ELSE 38000245 END, 
-end_date, pcori_basecode, diag.omop_sourcecode
+end_date, pcori_basecode, diag.omop_sourcecode, factline.start_date
 from i2b2fact factline
 inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
  left outer join #sourcefact sf
@@ -585,7 +585,7 @@ where pxsource.c_fullname like '\PCORI\PROCEDURE\%'
 ---------------------- Old PCORI Columns----------------------------------------------------------
 --				patid,			encounterid,	enc_type, admit_date, providerid, px, px_type, px_source,px_date) 
 ---------------------------------------------------------------------------------------------------
-insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_date, procedure_type_concept_id, modifier_concept_id, quantity, provider_id, visit_occurrence_id, procedure_source_value, procedure_source_concept_id, qualifier_source_value) 
+insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_date, procedure_type_concept_id, modifier_concept_id, quantity, provider_id, visit_occurrence_id, procedure_source_value, procedure_source_concept_id, qualifier_source_value, procedure_datetime) 
 ---------------------- Old PCORI values ----------------------------------------------------------------
 --enc.encounterid, fact.patient_num, 	enc.enc_type, enc.admit_date, 
 --		enc.providerid, substring(pr.pcori_basecode,charindex(':',pr.pcori_basecode)+1,11) px, substring(pr.c_fullname,18,2) pxtype, 'NI' px_source,fact.start_date
@@ -602,7 +602,7 @@ insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_da
 -- procedure_source_value ----------> PCORI base code from ontology -------------------------------> Done
 -- procuedure_source_concept_id ----> OMOP source code from ontology ------------------------------> Done
 -- qualifier_source_value ----------> The source code for the qualifier as it appears in the source data. What is this?????????????
-select  distinct fact.patient_num, isnull(omap.concept_id, '0'), enc.visit_start_date, 0, 0, null, 0, fact.encounter_num, pproc.PCORI_BASECODE, pproc.OMOP_SOURCECODE, null
+select  distinct fact.patient_num, isnull(omap.concept_id, '0'), enc.visit_start_date, 0, 0, null, 0, fact.encounter_num, pproc.PCORI_BASECODE, pproc.OMOP_SOURCECODE, null, fact.start_date
 from i2b2fact fact
 ---------------------------------------------------------
 -- For every procedure there must be a corresponding visit
@@ -646,7 +646,7 @@ INSERT INTO dbo.[measurement]
       ,[visit_occurrence_id]--[ENCOUNTERID]
       ,[measurement_source_value]--[LAB_LOINC]
       ,[measurement_date]--[RESULT_DATE]
-      ,[measurement_time]--[RESULT_TIME]
+      ,[measurement_datetime]--[RESULT_TIME]
       ,[value_as_concept_id]--[RESULT_QUAL]
       ,[value_as_number]--[RESULT_NUM]
       ,[unit_source_value]--[RESULT_UNIT]
@@ -737,7 +737,7 @@ INSERT INTO dbo.[measurement]
       --,[]--[LAB_PX]
       --,[]--[LAB_PX_TYPE]
       ,[measurement_date]--[RESULT_DATE]
-      ,[measurement_time]--[RESULT_TIME]
+      ,[measurement_datetime]--[RESULT_TIME]
       ,[value_as_concept_id]--[RESULT_QUAL]
       ,[value_as_number]--[RESULT_NUM]
       --,[]--[RESULT_MODIFIER]
