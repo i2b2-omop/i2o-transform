@@ -19,15 +19,15 @@ c.domain_id='Condition'
 
 -- Fill in OMOP basecode for Condition
 -- 27,0000 don't get converted that have a valid sourcecode...
-update d set omop_basecode=c2.concept_id
-from pcornet_diag d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
-inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join conceptc2 ON c2.concept_id =cr.concept_id_2
-and c2.standard_concept ='S'
-and c2.invalid_reason is null
-and c2.domain_id='Condition'
+--update d set omop_basecode=c2.concept_id
+--from pcornet_diag d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+--inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+--inner join conceptc2 ON c2.concept_id =cr.concept_id_2
+--and c2.standard_concept ='S'
+--and c2.invalid_reason is null
+--and c2.domain_id='Condition'
 
--- Alternately, create new table for OMOP basecode for Condition
+-- The New Way - create new table for OMOP basecode for Condition
 -- Can handle multiple target SNOMED mappings this way
 DROP TABLE i2o_mapping
 GO
@@ -50,20 +50,20 @@ where
 c.domain_id='Procedure'
 
 -- Fill in OMOP basecode for Procedure
-update d set omop_basecode=c1.concept_id
-from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
-inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
-and c2.standard_concept ='S'
-and c2.invalid_reason is null
-and c2.domain_id='Procedure'
+-- update d set omop_basecode=c1.concept_id
+-- from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+-- inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+-- inner join concept c2 ON c2.concept_id =cr.concept_id_2
+-- and c2.standard_concept ='S'
+-- and c2.invalid_reason is null
+-- and c2.domain_id='Procedure'
 
--- Add to mapping table for Procedure
+-- New way: Add to mapping table for Procedure
 insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
 select omop_sourcecode, c2.concept_id,c2.domain_id
 from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
+inner join conceptï¿½c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Procedure'
@@ -80,7 +80,7 @@ insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
 select omop_sourcecode, c2.concept_id,c2.domain_id
 from pcornet_lab d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
+inner join conceptï¿½c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Measurement'
@@ -170,7 +170,7 @@ where x.c>1 and p.domain_id='Condition' order by x.person_id,x.visit_occurrence_
 select distinct c1.vocabulary_id,c1.standard_concept,cr.relationship_id,c2.vocabulary_id,c2.standard_concept
 from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 --and (cr.relationship_id = 'Maps to' or cr.relationship_id = 'ICD9P - SNOMED eq')
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
+inner join conceptï¿½c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Procedure'
@@ -197,5 +197,5 @@ select distinct vocabulary_id from concept
 select distinct c1.concept_class_id,relationship_id,c2.concept_class_id
 from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
+inner join conceptï¿½c2 ON c2.concept_id =cr.concept_id_2
 where c_fullname like '%\09\%'
