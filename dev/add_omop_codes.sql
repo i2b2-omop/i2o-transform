@@ -63,7 +63,7 @@ insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
 select omop_sourcecode, c2.concept_id,c2.domain_id
 from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept�c2 ON c2.concept_id =cr.concept_id_2
+inner join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Procedure'
@@ -107,8 +107,27 @@ on concept_code=p.i_loinc
 where 
 c.domain_id='Measurement'
 
+-- Add source code for drug expose
+update p set omop_sourcecode=concept_id
+from pcornet_med p inner join concept as c
+on concept_code=pcori_cui
+where 
+c.domain_id='Drug'
 
---- WORKSPACE ------
+-- New way: Add to mapping table for Drug
+insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
+select omop_sourcecode, c2.concept_id,c2.domain_id
+from pcornet_med d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+inner join concept c2 ON c2.concept_id =cr.concept_id_2
+and c2.standard_concept ='S'
+and c2.invalid_reason is null
+and c2.domain_id='Drug'
+
+--- WORKSPACE -----
+select * from i2o_mapping where domain_id='Drug'
+
+
 select c.concept_name,c2.concept_name
 from concept as c
 inner join concept_relationship r on c.concept_id  =r.concept_id_1
