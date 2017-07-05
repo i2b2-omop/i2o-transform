@@ -1,9 +1,8 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- OMOPLoader Script for OMOP v5.1
+-- OMOPLoader Script for OMOP v0.1
 -- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres
--- Version now managed by changelog. Last update 12/7/16@6pm
--- NOT NEARLY FINISHED! FOR DEVELOPERS ONLY!
+-- Transforms i2b2 data mapped to the PCORnet ontology into OMOP format.
 -- MSSQL version
 --
 -- INSTRUCTIONS:
@@ -459,7 +458,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 2. Encounter - v6 by Jeff Klann and Aaron Abend and Matthew Joss
+-- 2. Encounter - by Jeff Klann and Aaron Abend and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPencounter') AND type in (N'P', N'PC'))
 DROP PROCEDURE OMOPencounter
@@ -492,11 +491,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 3. Diagnosis - v6.1 by Aaron Abend and Jeff Klann and Matthew Joss
---   new: removed factline cache
---        now ignores facts with a condition modifier
---        6.1. optimized for temp tables
--- + 3a. Condition, combined within this procedure.
+-- 3. Diagnosis - by Aaron Abend and Jeff Klann and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdiagnosis
 go
@@ -555,7 +550,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 4. Procedures - v6 by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
+-- 4. Procedures - by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
