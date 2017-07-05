@@ -20,7 +20,7 @@
 -- create synonyms to make the code portable - please edit these
 ----------------------------------------------------------------------------------------------------------------------------------------
 
--- Change to your pmn database
+-- Change to your omop database
 use PMI
 go
 
@@ -103,10 +103,8 @@ GO
 
 
 ----------------------------------------------------------------------------------------------------------------------------------------
--- ALTER THE TABLES - note that all tables have changed since v5
+-- ALTER THE TABLES - 
 ----------------------------------------------------------------------------------------------------------------------------------------
-
--- Download SQL to create the tables from https://github.com/OHDSI/CommonDataModel
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[PMN_LabNormal]') AND type in (N'U'))
 DROP TABLE [dbo].[PMN_LabNormal]
@@ -461,9 +459,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 2. Encounter - v6 by Jeff Klann and Aaron Abend
--- TODO: This version does not translate codes in the visit_dimension columns, except inout_cd (enc_type)
--- Bugfix: Multiple DRGs in one encounter no longer causes error
+-- 2. Encounter - v6 by Jeff Klann and Aaron Abend and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPencounter') AND type in (N'P', N'PC'))
 DROP PROCEDURE OMOPencounter
@@ -496,7 +492,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 3. Diagnosis - v6.1 by Aaron Abend and Jeff Klann
+-- 3. Diagnosis - v6.1 by Aaron Abend and Jeff Klann and Matthew Joss
 --   new: removed factline cache
 --        now ignores facts with a condition modifier
 --        6.1. optimized for temp tables
@@ -509,7 +505,7 @@ create procedure OMOPdiagnosis as
 declare @sqltext nvarchar(4000)
 begin
 
--- Optimized to use temp tables, not views. Also removed the distinct for speed.
+-- Optimized to use temp tables, not views. 
 select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
  into #sourcefact
 from i2b2fact factline
@@ -524,7 +520,7 @@ inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
-select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, --bug fix MJ 10/7/16
+select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, 
 isnull(omap.concept_id, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
@@ -535,15 +531,15 @@ inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.
  left outer join #sourcefact sf
 on	factline.patient_num=sf.patient_num
 and factline.encounter_num=sf.encounter_num
-and factline.provider_id=sf.provider_id --bug fix MJ 10/7/16, JK 12/7/16
+and factline.provider_id=sf.provider_id 
 and factline.concept_cd=sf.concept_Cd
-and factline.start_date=sf.start_Date --bug fix MJ 10/7/16, JK 12/7/16
+and factline.start_date=sf.start_Date 
 left outer join #pdxfact pf
 on	factline.patient_num=pf.patient_num
 and factline.encounter_num=pf.encounter_num
-and factline.provider_id=pf.provider_id --bug fix MJ 10/7/16, JK 12/7/16
+and factline.provider_id=pf.provider_id 
 and factline.concept_cd=pf.concept_cd
-and factline.start_date=pf.start_Date --bug fix MJ 10/7/16, JK 12/7/16
+and factline.start_date=pf.start_Date 
 inner join pcornet_diag diag on diag.c_basecode  = factline.concept_cd
 inner join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Condition'
 -- Skip ICD-9 V codes in 10 ontology, ICD-9 E codes in 10 ontology, ICD-10 numeric codes in 10 ontology
@@ -559,10 +555,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 4. Procedures - v6 by Aaron Abend and Jeff Klann
--- v6 - minor optimizations
--- 0.6.4 - NI in px_source, fixed encounter start vs. fact start
--- 0.6.5 - Somehow was referencing the wrong column name from encounter table for admit date
+-- 4. Procedures - v6 by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
@@ -574,7 +567,7 @@ begin
 ---------------------------------------
 -- Copied and tweaked from condition_ocurrence procedure 'OMOPDiagnosis'
 ---------------------------------------
--- Optimized to use temp tables, not views. Also removed the distinct for speed.
+-- Optimized to use temp tables, not views. 
 select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, pxsource.pcori_basecode dxsource, pxsource.c_fullname
  into #procedurefact
 from i2b2fact factline
@@ -629,9 +622,10 @@ go
 
 
 ----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
 ------------------------- Vitals ------------------------------------------------ 
 -- Written by Jeff Klann, PhD, and Matthew Joss
+----------------------------------------------------------------------------------------------------------------------------------------
+
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPvital') AND type in (N'P', N'PC'))
 DROP PROCEDURE OMOPvital
@@ -673,40 +667,11 @@ and vital.i_loinc is not null
 
 end
 go
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
--- 6. Enrollment - v6 by Jeff Klann
-----------------------------------------------------------------------------------------------------------------------------------------
-------------------------- Enrollment Code ------------------------------------------------ 
--- Written by Jeff Klann, PhD
--- v6 Updated 9/30/15 - now supports loyalty cohort (be sure view at the top of the script is updated)
--- Bugfix 1/11/16 - BASIS should be called ENR_BASIS
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPenroll') AND type in (N'P', N'PC'))
-DROP PROCEDURE OMOPenroll
-GO
-
-create procedure OMOPenroll as
-begin
-
-INSERT INTO [pmnENROLLMENT]([PATID], [ENR_START_DATE], [ENR_END_DATE], [CHART], [ENR_BASIS]) 
-    select x.patient_num patid, case when l.patient_num is not null then l.period_start else enr_start end enr_start_date
-    , case when l.patient_num is not null then l.period_end when enr_end_end>enr_end then enr_end_end else enr_end end enr_end_date 
-    , 'Y' chart, case when l.patient_num is not null then 'A' else 'E' end enr_basis from 
-    (select patient_num, min(start_date) enr_start,max(start_date) enr_end,max(end_date) enr_end_end from i2b2visit where patient_num in (select patid from pmndemographic) group by patient_num) x
-    left outer join i2b2loyalty_patients l on l.patient_num=x.patient_num
-
-end
-go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 7. LAB_RESULT_CM - v6.1
+-- 7. LAB_RESULT_CM - Written by Jeff Klann, PhD and Arturo Torres, and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
-------------------------- LAB_RESULT_CM------------------------------------------------ 
--- 8/14/2015 - first version
--- 9/24/15 - Removed factline cache and optimized
--- 12/9/15 - Optimized to use temp tables
--- Written by Jeff Klann, PhD and Arturo Torres
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPlabResultCM') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPlabResultCM;
 GO
@@ -767,7 +732,7 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --isnull(l.RESULT_LOC,'NI') RESULT_LOC,
 --isnull(lab.pcori_basecode, 'NI') LAB_PX,
 --'LC'  LAB_PX_TYPE,
-Cast(m.start_date as DATE) RESULT_DATE,   -- Bug fix MJ 10/06/16
+Cast(m.start_date as DATE) RESULT_DATE,   
 CAST(CONVERT(char(5), M.start_date, 108) as TIME) RESULT_TIME,
 isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END, '0') RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
@@ -782,7 +747,7 @@ CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(
 isnull(u.concept_id, '0'), isnull(omap.concept_id, '0'), isnull(ont_loinc.omop_sourcecode, '0'), '44818702', '0', '0'
 
 
-FROM i2b2fact M   --JK bug fix 10/7/16
+FROM i2b2fact M  
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
 inner join pcornet_lab lab on lab.c_basecode  = M.concept_cd and lab.c_fullname like '\PCORI\LAB_RESULT_CM\%'
 inner join pcornet_lab ont_loinc on lab.pcori_basecode=ont_loinc.pcori_basecode and ont_loinc.c_basecode like 'LOINC:%' --NOTE: You will need to change 'LOINC:' to our local term.
@@ -817,30 +782,9 @@ GO
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 8. HARVEST - v6
--- Populates with SCILHS defaults and parameters at top of script. Update for other networks.
--- 1/16/16 fixed typo
--- 5/17/16 fixed quotes around insert statement
-----------------------------------------------------------------------------------------------------------------------------------------
--- BUGFIX 04/22/16: Needed leading zeros on numbers
-
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPharvest') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPharvest;
-GO
-create procedure OMOPharvest as
-begin
-
-INSERT INTO [dbo].[pmnharvest]([NETWORKID], [NETWORK_NAME], [DATAMARTID], [DATAMART_NAME], [DATAMART_PLATFORM], [CDM_VERSION], [DATAMART_CLAIMS], [DATAMART_EHR], [BIRTH_DATE_MGMT], [ENR_START_DATE_MGMT], [ENR_END_DATE_MGMT], [ADMIT_DATE_MGMT], [DISCHARGE_DATE_MGMT], [PX_DATE_MGMT], [RX_ORDER_DATE_MGMT], [RX_START_DATE_MGMT], [RX_END_DATE_MGMT], [DISPENSE_DATE_MGMT], [LAB_ORDER_DATE_MGMT], [SPECIMEN_DATE_MGMT], [RESULT_DATE_MGMT], [MEASURE_DATE_MGMT], [ONSET_DATE_MGMT], [REPORT_DATE_MGMT], [RESOLVE_DATE_MGMT], [PRO_DATE_MGMT], [REFRESH_DEMOGRAPHIC_DATE], [REFRESH_ENROLLMENT_DATE], [REFRESH_ENCOUNTER_DATE], [REFRESH_DIAGNOSIS_DATE], [REFRESH_PROCEDURES_DATE], [REFRESH_VITAL_DATE], [REFRESH_DISPENSING_DATE], [REFRESH_LAB_RESULT_CM_DATE], [REFRESH_CONDITION_DATE], [REFRESH_PRO_CM_DATE], [REFRESH_PRESCRIBING_DATE], [REFRESH_PCORNET_TRIAL_DATE], [REFRESH_DEATH_DATE], [REFRESH_DEATH_CAUSE_DATE]) 
-	VALUES('SCILHS', 'SCILHS', dbo.getDataMartID(), dbo.getDataMartName(), dbo.getDataMartPlatform(), 3, '01', '02', '01','01','02','01','02','01','02','01','02','01','01','02','02','01','01','01','02','01',getdate(),getdate(),getdate(),getdate(),getdate(),getdate(),getdate(),getdate(),getdate(),null,getdate(),null,null,null)
-
-end
-GO
-
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
--- 9. Prescribing - by Aaron Abend and Jeff Klann, PhD with optimizations by Griffin Weber, MD, PhD
+-- 9. Prescribing - by Aaron Abend and Jeff Klann PhD and Matthew Joss with optimizations by Griffin Weber, MD, PhD
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
--- TODO: The first encounter inner join seems to slow things down
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdrug_exposure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdrug_exposure;
 GO
@@ -967,101 +911,10 @@ select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date 
     and m.provider_id = supply.provider_id
     and m.instance_num = supply.instance_num
 
-where (basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%') -- jgk 11/2 bugfix: filter for PR, not DI
+where (basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%')
 
 end
 GO
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
--- 9a. Dispensing - by Aaron Abend and Jeff Klann, PhD 
-----------------------------------------------------------------------------------------------------------------------------------------
--- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
-
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdispensing') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdispensing;
-GO
-create procedure OMOPdispensing as
-begin
-
--- Griffin's optimizations - 12/9/15
-select nval_num,encounter_num,concept_cd 
-    into #supply
-    from i2b2fact supply
-        inner join pmnENCOUNTER enc on enc.patid = supply.patient_num and enc.encounterid = supply.encounter_Num
-      join pcornet_med supplycode 
-        on supply.modifier_cd = supplycode.c_basecode
-        and supplycode.c_fullname like '\PCORI_MOD\RX_DAYS_SUPPLY\'
-
-select nval_num,encounter_num,concept_cd 
-    into #amount
-    from i2b2fact amount
-     join pcornet_med amountcode
-        on amount.modifier_cd = amountcode.c_basecode
-        and amountcode.c_fullname like '\PCORI_MOD\RX_QUANTITY\'
-
--- insert data with outer joins to ensure all records are included even if some data elements are missing
-
-insert into pmndispensing (
-	PATID
-    ,PRESCRIBINGID
-	,DISPENSE_DATE -- using start_date from i2b2
-    ,NDC --using pcornet_med pcori_ndc - new column!
-    ,DISPENSE_SUP ---- modifier nval_num
-    ,DISPENSE_AMT  -- modifier nval_num
---    ,RAW_NDC
-)
-select  m.patient_num, null,m.start_date, isnull(mo.pcori_ndc,'00000000000')
-    ,max(supply.nval_num) sup, max(amount.nval_num) amt 
-from i2b2fact m inner join pcornet_med mo
-on m.concept_cd = mo.c_basecode
-inner join pmnENCOUNTER enc on enc.encounterid = m.encounter_Num
-
-    -- jgk bugfix 11/2 - we weren't filtering dispensing events
-    inner join (select pcori_basecode,c_fullname,encounter_num,concept_cd from i2b2fact basis
-        inner join pmnENCOUNTER enc on enc.patid = basis.patient_num and enc.encounterid = basis.encounter_Num
-     join pcornet_med basiscode 
-        on basis.modifier_cd = basiscode.c_basecode
-        and basiscode.c_fullname='\PCORI_MOD\RX_BASIS\DI\') basis
-    on m.encounter_num = basis.encounter_num
-    and m.concept_cd = basis.concept_Cd 
-
-    left join #supply supply
-    on m.encounter_num = supply.encounter_num
-    and m.concept_cd = supply.concept_Cd
-
-    left join #amount amount
-    on m.encounter_num = amount.encounter_num
-    and m.concept_cd = amount.concept_Cd
-
-group by m.encounter_num ,m.patient_num, m.start_date,  mo.pcori_ndc
-
-end
-GO
-----------------------------------------------------------------------------------------------------------------------------------------
-----------------------------------------------------------------------------------------------------------------------------------------
--- 10. Death - v1 by Jeff Klann, PhD
--- Simple transform only pulls death date from patient dimension, does not rely on an ontology
-----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdeath') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdeath
-go
-
-
-create procedure OMOPdeath as
-
-begin
-insert into pmndeath( 
-				patid,			death_date, death_date_impute, death_source,death_match_confidence) 
-select  distinct pat.patient_num, pat.death_date, case 
-when vital_status_cd like 'X%' then 'B'
-when vital_status_cd like 'M%' then 'D'
-when vital_status_cd like 'Y%' then 'N'
-else 'OT'	
-end, 'NI','NI'
-from i2b2patient pat
-where (pat.death_date is not null or vital_status_cd like 'Z%') and pat.patient_num in (select patid from pmndemographic)
-
-end
-go
-
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -1117,146 +970,3 @@ exec OMOPreport
 
 end
 go
-
-----------------------------------------------------------------------------------------------------------------------------------------
--- 12. Report Results - Version 5.1 by Aaron Abend and Jeff Klann
--- This version is useful to check against i2b2, but consider running the more detailed annotated data dictionary tool also.
-----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPreport') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPreport
-go
-
-CREATE PROCEDURE [dbo].[OMOPreport] 
-as
-declare @i2b2vitald numeric
-declare @i2b2dxd numeric
-declare @i2b2cond numeric
-declare @i2b2pxd numeric
-declare @i2b2encountersd numeric
-declare @i2b2pats  numeric
-declare @i2b2Encounters numeric
-declare @i2b2facts numeric
-declare @i2b2dxs numeric
-declare @i2b2procs numeric
-declare @i2b2lcs numeric
-declare @pmnpats  numeric
-declare @pmnencounters numeric
-declare @pmndx numeric
-declare @pmnprocs numeric
-declare @pmnfacts numeric
-declare @pmnenroll numeric
-declare @pmnvital numeric
-declare @pmnlabs numeric
-declare @pmnprescribings numeric
-declare @pmndispensings numeric
-declare @pmncond numeric
-
-declare @pmnencountersd numeric
-declare @pmndxd numeric
-declare @pmnprocsd numeric
-declare @pmnfactsd numeric
-declare @pmnenrolld numeric
-declare @pmnvitald numeric
-declare @pmnlabsd numeric
-declare @pmnprescribingsd numeric
-declare @pmndispensingsd numeric
-declare @pmncondd numeric
-
-
-declare @runid numeric
-begin
-
-select @i2b2Pats =count(*)  from i2b2patient
-select @i2b2Encounters=count(*)   from i2b2visit i inner join pmndemographic d on i.patient_num=d.patid
---select @i2b2Facts=count(*)   from i2b2fact where concept_Cd like 'ICD9%'
-
--- Counts in PMN tables
-select @pmnPats=count(*)   from pmndemographic
-select @pmnencounters=count(*)   from pmnencounter e 
-select @pmndx=count(*)   from pmndiagnosis
-select @pmnprocs =count(*)  from pmnprocedure
-select @pmncond=count(*) from pmncondition
-select @pmnenroll =count(*)  from pmnenrollment
-select @pmnvital =count(*)  from pmnvital
-select @pmnlabs =count(*)  from pmnlabresults_cm
-select @pmnprescribings =count(*)  from pmnprescribing
-select @pmndispensings =count(*)  from pmndispensing
-
--- Distinct patients in PMN tables
-select @pmnencountersd=count(distinct patid)  from pmnencounter e 
-select @pmndxd=count(distinct patid)   from pmndiagnosis
-select @pmnprocsd =count(distinct patid)  from pmnprocedure
-select @pmncondd=count(distinct patid) from pmncondition
-select @pmnenrolld =count(distinct patid)  from pmnenrollment
-select @pmnvitald =count(distinct patid)  from pmnvital
-select @pmnlabsd =count(distinct patid)  from pmnlabresults_cm
-select @pmnprescribingsd =count(distinct patid)  from pmnprescribing
-select @pmndispensingsd =count(distinct patid)  from pmndispensing
-
--- Distinct patients in i2b2 (unfinished)
-select @i2b2pxd=count(distinct patient_num) from i2b2fact fact
- inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
-where pr.c_fullname like '\PCORI\PROCEDURE\%'
-
-select  patient_num, encounter_num, provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
- into #sourcefact
-from i2b2fact factline
-inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
-where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
-
-select @i2b2dxd=count(distinct factline.patient_num) from i2b2fact factline
- left outer join #sourcefact sf
-on	factline.patient_num=sf.patient_num
-and factline.encounter_num=sf.encounter_num
-and factline.provider_id=sf.provider_id
-and factline.concept_cd=sf.concept_Cd
-and factline.start_date=sf.start_Date 
- inner join	pcornet_diag dx on dx.c_basecode  = factline.concept_cd   
-where dx.c_fullname like '\PCORI\DIAGNOSIS\%' 
-and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
-
-select @i2b2cond=count(distinct factline.patient_num) from i2b2fact factline
- left outer join #sourcefact sf
-on	factline.patient_num=sf.patient_num
-and factline.encounter_num=sf.encounter_num
-and factline.provider_id=sf.provider_id
-and factline.concept_cd=sf.concept_Cd
-and factline.start_date=sf.start_Date 
- inner join	pcornet_diag dx on dx.c_basecode  = factline.concept_cd   
-where dx.c_fullname like '\PCORI\DIAGNOSIS\%' 
-and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\CONDITION_SOURCE\%')
-
-
--- Counts in i2b2
-/*select @i2b2pxde=count(distinct patient_num) from i2b2fact fact
- inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
- inner join pmnENCOUNTER enc on enc.patid = fact.patient_num and enc.encounterid = fact.encounter_Num
-where pr.c_fullname like '\PCORI\PROCEDURE\%'*/
-/*select @i2b2dxd=count(distinct patient_num) from i2b2fact fact
- inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
-where pr.c_fullname like '\PCORI\PROCEDURE\%'
-select @i2b2vitald=count(distinct patient_num) from i2b2fact fact
- inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
-where pr.c_fullname like '\PCORI\PROCEDURE\%'
-*/
-
-select @i2b2encountersd=count(distinct patient_num) from i2b2visit 
-
-select @runid = max(runid) from i2pReport
-set @runid = @runid + 1
-insert into i2pReport select @runid, getdate(), 'Pats',			@i2b2pats, @i2b2pats,		@pmnpats,			null
-insert into i2pReport select @runid, getdate(), 'Enrollment',	@i2b2pats, @i2b2pats,		@pmnenroll,			@pmnenrolld
-
-insert into i2pReport select @runid, getdate(), 'Encounters',	@i2b2Encounters,null,@pmnEncounters,		@pmnEncountersd
-insert into i2pReport select @runid, getdate(), 'DX',		null,@i2b2dxd,@pmndx,	@pmndxd
-insert into i2pReport select @runid, getdate(), 'PX',		null,@i2b2pxd,@pmnprocs,	@pmnprocsd
-insert into i2pReport select @runid, getdate(), 'Condition',		null,@i2b2cond,		@pmncond,	@pmncondd
-insert into i2pReport select @runid, getdate(), 'Vital',		null,@i2b2vitald,		@pmnvital,	@pmnvitald
-insert into i2pReport select @runid, getdate(), 'Labs',		null,null,		@pmnlabs,	@pmnlabsd
-insert into i2pReport select @runid, getdate(), 'Prescribing',		null,null,	@pmnprescribings,	@pmnprescribingsd
-insert into i2pReport select @runid, getdate(), 'Dispensing',		null,null,	@pmndispensings,	@pmndispensingsd
-
-select concept 'Data Type',sourceval 'From i2b2',sourcedistinct 'Patients in i2b2' ,  destval 'In PopMedNet', destdistinct 'Patients in PopMedNet' from i2preport where runid=@runid
-
-end
-GO
-
