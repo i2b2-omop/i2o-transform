@@ -1,9 +1,8 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- OMOPLoader Script for OMOP v5.1
+-- OMOPLoader Script for OMOP v0.1
 -- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres
--- Version now managed by changelog. Last update 12/7/16@6pm
--- NOT NEARLY FINISHED! FOR DEVELOPERS ONLY!
+-- Transforms i2b2 data mapped to the PCORnet ontology into OMOP format.
 -- MSSQL version
 --
 -- INSTRUCTIONS:
@@ -21,10 +20,11 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Change to your omop database
-use PMI
+use i2b2stub;
 go
 
 -- drop any existing synonyms
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2concept') DROP SYNONYM i2b2concept
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2fact') DROP SYNONYM i2b2fact
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2patient') DROP SYNONYM  i2b2patient
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2visit') DROP SYNONYM  i2b2visit
@@ -42,31 +42,35 @@ GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for dimension tables
-create synonym i2b2visit for PMI..visit_dimension
+create synonym i2b2visit for i2b2stub..visit_dimension
 GO 
-create synonym i2b2patient for  PMI..patient_dimension
+create synonym i2b2patient for  i2b2stub..patient_dimension
 GO
-create synonym i2b2fact for  PMI..observation_fact    
+create synonym i2b2fact for  i2b2stub..observation_fact    
 GO
-create synonym i2b2concept for  PMI..concept_dimension  
+create synonym i2b2concept for  i2b2stub..concept_dimension  
 GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for ontology dimensions and loyalty cohort summary
-create synonym pcornet_med for PMI..pcornet_med
+-- The synonyms in comments have identical names to the tables - 
+-- you will only need to edit and uncomment if your tables have
+-- names other than these
+
+--create synonym pcornet_med for i2b2stub..pcornet_med
+--GO
+--create synonym pcornet_lab for i2b2stub..pcornet_lab
+--GO
+--create synonym pcornet_diag for i2b2stub..pcornet_diag
+--GO 
+--create synonym pcornet_demo for i2b2stub..pcornet_demo 
+--GO
+create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
 GO
-create synonym pcornet_lab for PMI..pcornet_lab
-GO
-create synonym pcornet_diag for PMI..pcornet_diag
-GO 
-create synonym pcornet_demo for PMI..pcornet_demo 
-GO
-create synonym pcornet_proc for PMI..pcornet_proc
-GO
-create synonym pcornet_vital for PMI..pcornet_vital_30
-GO
-create synonym pcornet_enc for PMI..pcornet_enc_15
-GO
+--create synonym pcornet_vital for i2b2stub..pcornet_vital
+--GO
+--create synonym pcornet_enc for i2b2stub..pcornet_enc
+--GO
 
 -- Create the demographics codelist (no need to modify)
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[omop_codelist]') AND type in (N'U'))
@@ -157,7 +161,9 @@ GO
 
 
 
-
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_condition_occurrence') 
+	Alter table condition_occurrence DROP constraint xpk_condition_occurrence
+Go
 Alter Table condition_occurrence Drop Column condition_occurrence_id
 Go
 
@@ -165,6 +171,10 @@ Alter Table condition_occurrence
 Add condition_occurrence_id Int Identity(1, 1)
 Go
 
+
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_procedure_occurrence') 
+	Alter table procedure_occurrence DROP constraint xpk_procedure_occurrence
+Go
 Alter Table procedure_occurrence Drop Column procedure_occurrence_id
 Go
 
@@ -172,6 +182,9 @@ Alter Table procedure_occurrence
 Add procedure_occurrence_id Int Identity(1, 1)
 Go
 
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_measurement') 
+	Alter table measurement DROP constraint xpk_measurement
+Go
 Alter Table measurement Drop Column measurement_id
 Go
 
@@ -179,6 +192,9 @@ Alter Table measurement
 Add measurement_id Int Identity(1, 1)
 Go
 
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_drug_exposure') 
+	Alter table drug_exposure DROP constraint xpk_drug_exposure
+Go
 Alter Table drug_exposure Drop Column drug_exposure_id
 Go
 
@@ -459,7 +475,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 2. Encounter - v6 by Jeff Klann and Aaron Abend and Matthew Joss
+-- 2. Encounter - by Jeff Klann and Aaron Abend and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPencounter') AND type in (N'P', N'PC'))
 DROP PROCEDURE OMOPencounter
@@ -492,11 +508,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 3. Diagnosis - v6.1 by Aaron Abend and Jeff Klann and Matthew Joss
---   new: removed factline cache
---        now ignores facts with a condition modifier
---        6.1. optimized for temp tables
--- + 3a. Condition, combined within this procedure.
+-- 3. Diagnosis - by Aaron Abend and Jeff Klann and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdiagnosis
 go
@@ -555,7 +567,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 4. Procedures - v6 by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
+-- 4. Procedures - by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
@@ -927,18 +939,12 @@ create procedure OMOPclear
 as 
 begin
 
-DELETE FROM pmndispensing
-DELETE FROM pmnprescribing
-DELETE FROM pmnprocedure
-DELETE FROM pmndiagnosis
-DELETE FROM pmncondition
-DELETE FROM pmnvital
-DELETE FROM pmnenrollment
-DELETE FROM pmnlabresults_cm
-delete from pmndeath
-DELETE FROM pmnencounter
-DELETE FROM pmndemographic
-DELETE FROM pmnharvest
+DELETE FROM person
+DELETE FROM visit_occurrence
+DELETE FROM condition_occurrence
+DELETE FROM drug_exposure
+DELETE FROM measurement
+DELETE FROM procedure_occurrence
 
 end
 go
@@ -954,18 +960,13 @@ as
 begin
 
 exec OMOPclear
-exec OMOPharvest
 exec OMOPdemographics
 exec OMOPencounter
 exec OMOPdiagnosis
 exec OMOPcondition
-exec OMOPprocedure
 exec OMOPvital
 exec OMOPenroll
 exec OMOPlabResultCM
-exec OMOPprescribing
-exec OMOPdispensing
-exec OMOPdeath
 exec OMOPreport
 
 end
