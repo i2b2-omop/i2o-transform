@@ -38,7 +38,7 @@ GO
 
 --exec pcornetloader;
 --GO
-exec pcornetclear
+exec OMOPclear
 GO
 delete from person
 GO
@@ -62,23 +62,9 @@ exec omopVital
 GO
 exec omopLabResultCM
 GO
-delete from PMNenrollment
-GO
-exec PCORNetEnroll
-GO
 delete from drug_exposure
 GO
 exec OMOPdrug_exposure
-GO
-delete from pmndispensing
-GO
-exec PCORNetDispensing
-GO
-delete from pmnDeath
-GO
-exec PCORNetDeath
-GO
-exec pcornetreport
 GO
 
 select * from i2pReport;
