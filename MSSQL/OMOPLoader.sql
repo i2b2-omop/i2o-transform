@@ -939,18 +939,12 @@ create procedure OMOPclear
 as 
 begin
 
-DELETE FROM pmndispensing
-DELETE FROM pmnprescribing
-DELETE FROM pmnprocedure
-DELETE FROM pmndiagnosis
-DELETE FROM pmncondition
-DELETE FROM pmnvital
-DELETE FROM pmnenrollment
-DELETE FROM pmnlabresults_cm
-delete from pmndeath
-DELETE FROM pmnencounter
-DELETE FROM pmndemographic
-DELETE FROM pmnharvest
+DELETE FROM person
+DELETE FROM visit_occurrence
+DELETE FROM condition_occurrence
+DELETE FROM drug_exposure
+DELETE FROM measurement
+DELETE FROM procedure_occurrence
 
 end
 go
@@ -966,18 +960,13 @@ as
 begin
 
 exec OMOPclear
-exec OMOPharvest
 exec OMOPdemographics
 exec OMOPencounter
 exec OMOPdiagnosis
 exec OMOPcondition
-exec OMOPprocedure
 exec OMOPvital
 exec OMOPenroll
 exec OMOPlabResultCM
-exec OMOPprescribing
-exec OMOPdispensing
-exec OMOPdeath
 exec OMOPreport
 
 end
