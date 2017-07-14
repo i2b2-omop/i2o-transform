@@ -20,7 +20,7 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Change to your omop database
-use i2b2_stub;
+use i2b2stub;
 go
 
 -- drop any existing synonyms
@@ -42,13 +42,13 @@ GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for dimension tables
-create synonym i2b2visit for i2b2_stub..visit_dimension
+create synonym i2b2visit for i2b2demodata..visit_dimension
 GO 
-create synonym i2b2patient for  i2b2_stub..patient_dimension
+create synonym i2b2patient for  i2b2demodata..patient_dimension
 GO
-create synonym i2b2fact for  i2b2_stub..observation_fact    
+create synonym i2b2fact for  i2b2demodata..observation_fact    
 GO
-create synonym i2b2concept for  i2b2_stub..concept_dimension  
+create synonym i2b2concept for  i2b2demodata..concept_dimension  
 GO
 
 -- You will almost certainly need to edit your database name
