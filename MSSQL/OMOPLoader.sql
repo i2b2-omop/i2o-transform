@@ -316,7 +316,7 @@ declare getsql cursor local for
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	'0,'+
 	''''+race.omop_basecode+''''+
@@ -335,7 +335,7 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	''''+hisp.omop_basecode+''','+
 	''''+race.omop_basecode+''''+
@@ -357,7 +357,7 @@ union --2 S, nR, nH
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	'0,'+
 	'0'+
@@ -374,7 +374,7 @@ union --3 -- nS,R, NH
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	'0,'+
 	''''+race.omop_basecode+''''+
@@ -391,7 +391,7 @@ union --B -- nS,R, H
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	''''+hisp.omop_basecode+''','+
 	''''+race.omop_basecode+''''+
@@ -411,7 +411,7 @@ union --4 -- S, NR, H
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	'38003563,'+
 	'0'+
@@ -428,7 +428,7 @@ union --5 -- NS, NR, H
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	'38003563,'+
 	'0'+
@@ -442,7 +442,7 @@ union --6 -- NS, NR, nH
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	'0,'+
 	'0'+
