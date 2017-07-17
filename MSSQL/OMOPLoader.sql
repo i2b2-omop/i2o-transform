@@ -42,13 +42,13 @@ GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for dimension tables
-create synonym i2b2visit for i2b2stub..visit_dimension
+create synonym i2b2visit for i2b2demodata..visit_dimension
 GO 
-create synonym i2b2patient for  i2b2stub..patient_dimension
+create synonym i2b2patient for  i2b2demodata..patient_dimension
 GO
-create synonym i2b2fact for  i2b2stub..observation_fact    
+create synonym i2b2fact for  i2b2demodata..observation_fact    
 GO
-create synonym i2b2concept for  i2b2stub..concept_dimension  
+create synonym i2b2concept for  i2b2demodata..concept_dimension  
 GO
 
 -- You will almost certainly need to edit your database name
@@ -65,8 +65,8 @@ GO
 --GO 
 --create synonym pcornet_demo for i2b2stub..pcornet_demo 
 --GO
-create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
-GO
+--create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
+--GO
 --create synonym pcornet_vital for i2b2stub..pcornet_vital
 --GO
 --create synonym pcornet_enc for i2b2stub..pcornet_enc
@@ -961,13 +961,13 @@ begin
 
 exec OMOPclear
 exec OMOPdemographics
+exec OMOPdrug_exposure
 exec OMOPencounter
 exec OMOPdiagnosis
-exec OMOPcondition
 exec OMOPvital
-exec OMOPenroll
 exec OMOPlabResultCM
-exec OMOPreport
+exec OMOPprocedure
+--exec OMOPreport
 
 end
 go
