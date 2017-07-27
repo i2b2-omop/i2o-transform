@@ -8,12 +8,12 @@
 -- All data from 1-1-2010 is transformed.
 -- Jeff Klann, PhD, and Matthew Joss
 --------------------------------------------------------------------------------------------------------------------------
-
+use i2b2stub
 drop table i2b2patient_list
 GO
 
 -- Make 100000000 number smaller for testing
-select distinct top 100000000 f.patient_num into i2b2patient_list from i2b2fact f
+select distinct top 100 f.patient_num into i2b2patient_list from i2b2fact f
 inner join i2b2visit v on f.patient_num=v.patient_num
 -- where f.start_date>='20100101' and v.start_date>='20100101'
 GO
@@ -23,14 +23,14 @@ GO
 drop view i2b2patient;
 GO
 -- Change to match your database name
-create view i2b2patient as select * from PCORI_Mart..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
+create view i2b2patient as select * from i2b2demodata..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
 GO
 drop synonym i2b2visit;
 GO
 drop view i2b2visit;
 GO
 -- Change to match your database name
-create view i2b2visit as select * from PCORI_Mart..visit_dimension where (end_date is null or end_date<getdate());
+create view i2b2visit as select * from i2b2demodata..visit_dimension where (end_date is null or end_date<getdate());
 GO
 
 

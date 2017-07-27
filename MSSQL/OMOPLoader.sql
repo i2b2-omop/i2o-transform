@@ -325,9 +325,9 @@ declare getsql cursor local for
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
 	'   and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo race, pcornet_demo sex
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
-	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union -- A - S,R,H
 select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -345,11 +345,11 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	'	and	lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo race, pcornet_demo hisp, pcornet_demo sex
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
-	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -366,7 +366,7 @@ union --2 S, nR, nH
 	'	and	lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''ni'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo sex
-	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -383,7 +383,7 @@ union --3 -- nS,R, NH
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
 	'   and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 	from pcornet_demo race
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
 union --B -- nS,R, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -401,7 +401,7 @@ union --B -- nS,R, H
 	'	and	lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 	from pcornet_demo race,pcornet_demo hisp
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
@@ -420,7 +420,7 @@ union --4 -- S, NR, H
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo sex
-	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union --5 -- NS, NR, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
