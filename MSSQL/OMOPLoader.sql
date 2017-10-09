@@ -20,10 +20,11 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Change to your omop database
-use PMI
+use i2b2stub;
 go
 
 -- drop any existing synonyms
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2concept') DROP SYNONYM i2b2concept
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2fact') DROP SYNONYM i2b2fact
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2patient') DROP SYNONYM  i2b2patient
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2visit') DROP SYNONYM  i2b2visit
@@ -41,31 +42,35 @@ GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for dimension tables
-create synonym i2b2visit for PMI..visit_dimension
+create synonym i2b2visit for i2b2demodata..visit_dimension
 GO 
-create synonym i2b2patient for  PMI..patient_dimension
+create synonym i2b2patient for  i2b2demodata..patient_dimension
 GO
-create synonym i2b2fact for  PMI..observation_fact    
+create synonym i2b2fact for  i2b2demodata..observation_fact    
 GO
-create synonym i2b2concept for  PMI..concept_dimension  
+create synonym i2b2concept for  i2b2demodata..concept_dimension  
 GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for ontology dimensions and loyalty cohort summary
-create synonym pcornet_med for PMI..pcornet_med
-GO
-create synonym pcornet_lab for PMI..pcornet_lab
-GO
-create synonym pcornet_diag for PMI..pcornet_diag
-GO 
-create synonym pcornet_demo for PMI..pcornet_demo 
-GO
-create synonym pcornet_proc for PMI..pcornet_proc
-GO
-create synonym pcornet_vital for PMI..pcornet_vital_30
-GO
-create synonym pcornet_enc for PMI..pcornet_enc_15
-GO
+-- The synonyms in comments have identical names to the tables - 
+-- you will only need to edit and uncomment if your tables have
+-- names other than these
+
+--create synonym pcornet_med for i2b2stub..pcornet_med
+--GO
+--create synonym pcornet_lab for i2b2stub..pcornet_lab
+--GO
+--create synonym pcornet_diag for i2b2stub..pcornet_diag
+--GO 
+--create synonym pcornet_demo for i2b2stub..pcornet_demo 
+--GO
+--create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
+--GO
+--create synonym pcornet_vital for i2b2stub..pcornet_vital
+--GO
+--create synonym pcornet_enc for i2b2stub..pcornet_enc
+--GO
 
 -- Create the demographics codelist (no need to modify)
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[omop_codelist]') AND type in (N'U'))
@@ -174,7 +179,9 @@ GO
 
 
 
-
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_condition_occurrence') 
+	Alter table condition_occurrence DROP constraint xpk_condition_occurrence
+Go
 Alter Table condition_occurrence Drop Column condition_occurrence_id
 Go
 
@@ -182,6 +189,10 @@ Alter Table condition_occurrence
 Add condition_occurrence_id Int Identity(1, 1)
 Go
 
+
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_procedure_occurrence') 
+	Alter table procedure_occurrence DROP constraint xpk_procedure_occurrence
+Go
 Alter Table procedure_occurrence Drop Column procedure_occurrence_id
 Go
 
@@ -189,6 +200,9 @@ Alter Table procedure_occurrence
 Add procedure_occurrence_id Int Identity(1, 1)
 Go
 
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_measurement') 
+	Alter table measurement DROP constraint xpk_measurement
+Go
 Alter Table measurement Drop Column measurement_id
 Go
 
@@ -196,6 +210,9 @@ Alter Table measurement
 Add measurement_id Int Identity(1, 1)
 Go
 
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_drug_exposure') 
+	Alter table drug_exposure DROP constraint xpk_drug_exposure
+Go
 Alter Table drug_exposure Drop Column drug_exposure_id
 Go
 
@@ -317,7 +334,7 @@ declare getsql cursor local for
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	'0,'+
 	''''+race.omop_basecode+''''+
@@ -326,9 +343,9 @@ declare getsql cursor local for
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
 	'   and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo race, pcornet_demo sex
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
-	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union -- A - S,R,H
 select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -336,7 +353,7 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	''''+hisp.omop_basecode+''','+
 	''''+race.omop_basecode+''''+
@@ -346,11 +363,11 @@ select 'insert into person(gender_source_value,race_source_value,ethnicity_sourc
 	'	and	lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo race, pcornet_demo hisp, pcornet_demo sex
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
-	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	and sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union --2 S, nR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -358,7 +375,7 @@ union --2 S, nR, nH
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	'0,'+
 	'0'+
@@ -367,7 +384,7 @@ union --2 S, nR, nH
 	'	and	lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''ni'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo sex
-	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union --3 -- nS,R, NH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -375,7 +392,7 @@ union --3 -- nS,R, NH
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	'0,'+
 	''''+race.omop_basecode+''''+
@@ -384,7 +401,7 @@ union --3 -- nS,R, NH
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
 	'   and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 	from pcornet_demo race
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
 union --B -- nS,R, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -392,7 +409,7 @@ union --B -- nS,R, H
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	''''+hisp.omop_basecode+''','+
 	''''+race.omop_basecode+''''+
@@ -402,7 +419,7 @@ union --B -- nS,R, H
 	'	and	lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'
 	from pcornet_demo race,pcornet_demo hisp
-	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE%'
+	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
 	and hisp.c_fullname like '\PCORI\DEMOGRAPHIC\HISPANIC\Y%'
 	and hisp.c_visualattributes like 'L%'
@@ -412,7 +429,7 @@ union --4 -- S, NR, H
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	''''+sex.omop_basecode+''','+
 	'38003563,'+
 	'0'+
@@ -421,7 +438,7 @@ union --4 -- S, NR, H
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '
 	from pcornet_demo sex
-	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX%'
+	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
 union --5 -- NS, NR, H
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
@@ -429,7 +446,7 @@ union --5 -- NS, NR, H
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	'38003563,'+
 	'0'+
@@ -443,7 +460,7 @@ union --6 -- NS, NR, nH
 	'	year(birth_date), '+
     '	month(birth_date), '+
     '	day(birth_date), '+
-	'	substring(convert(varchar,birth_date,20),12,5), '+
+	'	birth_date, '+ --Bug fix MJ 5/10/17
 	'0,'+
 	'0,'+
 	'0'+
@@ -963,18 +980,12 @@ create procedure OMOPclear
 as 
 begin
 
-DELETE FROM pmndispensing
-DELETE FROM pmnprescribing
-DELETE FROM pmnprocedure
-DELETE FROM pmndiagnosis
-DELETE FROM pmncondition
-DELETE FROM pmnvital
-DELETE FROM pmnenrollment
-DELETE FROM pmnlabresults_cm
-delete from pmndeath
-DELETE FROM pmnencounter
-DELETE FROM pmndemographic
-DELETE FROM pmnharvest
+DELETE FROM person
+DELETE FROM visit_occurrence
+DELETE FROM condition_occurrence
+DELETE FROM drug_exposure
+DELETE FROM measurement
+DELETE FROM procedure_occurrence
 
 end
 go
@@ -990,20 +1001,15 @@ as
 begin
 
 exec OMOPclear
-exec OMOPharvest
 exec OMOPdemographics
+exec OMOPdrug_exposure
 exec OMOPencounter
 exec OMOPobservationperiod
 exec OMOPdiagnosis
-exec OMOPcondition
-exec OMOPprocedure
 exec OMOPvital
-exec OMOPenroll
 exec OMOPlabResultCM
-exec OMOPprescribing
-exec OMOPdispensing
-exec OMOPdeath
-exec OMOPreport
+exec OMOPprocedure
+--exec OMOPreport
 
 end
 go
