@@ -100,6 +100,24 @@ CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN
 END
 GO
 
+-- Update the loyalty cohort filter set - you will need to point this to your local database name
+-- This is optional, if you have not run the loyalty cohort it will create an empty view
+-- Also set the loyalty cohort time period - this should be dynamic in a future update - right now it can be left alone
+-- Filters selected (61511) include: Has age and sex, Has race, Lives in same state as hospital,Has data in the first and last 18 months,Has diagnoses,Is alive,Is not in the bottom 10% of fact count 
+IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2loyalty_patients')) DROP VIEW i2b2loyalty_patients
+GO
+DECLARE @SQL as varchar(4000)
+IF  OBJECT_ID(N'[PCORI_Mart].[dbo].[loyalty_cohort_patient_summary]','U') IS NOT NULL
+SET @SQL='
+create view i2b2loyalty_patients as
+(select patient_num,cast(''2010/7/1'' as datetime) period_start,cast(''2014/7/1'' as datetime) period_end from PCORI_Mart..loyalty_cohort_patient_summary where filter_set & 61511 = 61511 and patient_num in (select patient_num from i2b2patient))'
+ELSE
+SET @SQL='
+create view i2b2loyalty_patients as
+(select top 0 patient_num,cast(''2010/1/1'' as datetime) period_start,cast(''2010/1/1'' as datetime) period_end from i2b2patient_list)'
+
+EXEC(@SQL)
+GO
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- ALTER THE TABLES - 
@@ -491,7 +509,30 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 3. Diagnosis - by Aaron Abend and Jeff Klann and Matthew Joss
+-- Observation Period  - Jeff Klann
+-- Very simple adaptation of PCORNet Enrollment table
+----------------------------------------------------------------------------------------------------------------------------------------
+------------------------- Enrollment Code ------------------------------------------------ 
+-- Written by Jeff Klann, PhD
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPObservationPeriod') AND type in (N'P', N'PC'))
+DROP PROCEDURE OMOPObservationPeriod
+GO
+
+create procedure OMOPObservationPeriod as
+begin
+
+INSERT INTO [Observation_Period]([person_id], [observation_perioid_start_date], [observation_period_end_date], [period_type_concept_id] ) 
+    select x.patient_num patid, case when l.patient_num is not null then l.period_start else enr_start end enr_start_date
+    , case when l.patient_num is not null then l.period_end when enr_end_end>enr_end then enr_end_end else enr_end end enr_end_date 
+    , case when l.patient_num is not null then 44814725 else 44814724 end enr_basis from 
+    (select patient_num, min(start_date) enr_start,max(start_date) enr_end,max(end_date) enr_end_end from i2b2visit where patient_num in (select patid from pmndemographic) group by patient_num) x
+    left outer join i2b2loyalty_patients l on l.patient_num=x.patient_num
+
+end
+go
+----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
+-- Diagnosis - by Aaron Abend and Jeff Klann and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdiagnosis
 go
@@ -550,7 +591,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 4. Procedures - by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
+-- Procedures - by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
@@ -665,7 +706,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 7. LAB_RESULT_CM - Written by Jeff Klann, PhD and Arturo Torres, and Matthew Joss
+-- LAB_RESULT_CM - Written by Jeff Klann, PhD and Arturo Torres, and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPlabResultCM') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPlabResultCM;
@@ -777,7 +818,7 @@ GO
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 9. Prescribing - by Aaron Abend and Jeff Klann PhD and Matthew Joss with optimizations by Griffin Weber, MD, PhD
+-- Prescribing - by Aaron Abend and Jeff Klann PhD and Matthew Joss with optimizations by Griffin Weber, MD, PhD
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
 
@@ -913,7 +954,7 @@ GO
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 10. clear Program - includes all tables
+-- clear Program - includes all tables
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPclear') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPclear
 go
@@ -952,6 +993,7 @@ exec OMOPclear
 exec OMOPharvest
 exec OMOPdemographics
 exec OMOPencounter
+exec OMOPobservationperiod
 exec OMOPdiagnosis
 exec OMOPcondition
 exec OMOPprocedure
