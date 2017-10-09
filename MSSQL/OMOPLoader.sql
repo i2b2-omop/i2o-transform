@@ -1,7 +1,7 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- OMOPLoader Script for OMOP v0.1
--- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres
+-- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres; Kevin Embree; Griffin Weber, MD, PhD
 -- Transforms i2b2 data mapped to the PCORnet ontology into OMOP format.
 -- MSSQL version
 --
@@ -105,10 +105,12 @@ CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN
 END
 GO
 
+----------------------------------------------------------------------------------------------------------------------------------------
 -- Update the loyalty cohort filter set - you will need to point this to your local database name
 -- This is optional, if you have not run the loyalty cohort it will create an empty view
 -- Also set the loyalty cohort time period - this should be dynamic in a future update - right now it can be left alone
 -- Filters selected (61511) include: Has age and sex, Has race, Lives in same state as hospital,Has data in the first and last 18 months,Has diagnoses,Is alive,Is not in the bottom 10% of fact count 
+----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2loyalty_patients')) DROP VIEW i2b2loyalty_patients
 GO
 DECLARE @SQL as varchar(4000)
@@ -176,7 +178,6 @@ GO
 INSERT INTO [dbo].[PMN_LabNormal]([LAB_NAME], [NORM_RANGE_LOW], [NORM_MODIFIER_LOW], [NORM_RANGE_HIGH], [NORM_MODIFIER_HIGH])
   VALUES('LAB_NAME:TROP_T_QN', '0', 'GE', '0.09', 'LE')
 GO
-
 
 
 IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_condition_occurrence') 
@@ -318,7 +319,7 @@ GO
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 1. Demographics 
+-- Demographics 
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdemographics') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdemographics
 go
@@ -493,7 +494,7 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- 2. Encounter - by Jeff Klann and Aaron Abend and Matthew Joss
+-- Encounter - by Jeff Klann and Aaron Abend and Matthew Joss
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPencounter') AND type in (N'P', N'PC'))
 DROP PROCEDURE OMOPencounter
@@ -980,12 +981,12 @@ create procedure OMOPclear
 as 
 begin
 
-DELETE FROM person
-DELETE FROM visit_occurrence
 DELETE FROM condition_occurrence
 DELETE FROM drug_exposure
 DELETE FROM measurement
 DELETE FROM procedure_occurrence
+DELETE FROM visit_occurrence
+DELETE FROM person
 
 end
 go
