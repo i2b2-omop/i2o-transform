@@ -3,6 +3,7 @@
 An experimental fork of the i2b2-to-PCORNET transform that targets OMOP, for the [Precision Medicine Initiative](https://www.nih.gov/research-training/allofus-research-program).
 
 Written by Jeffrey Klann, PhD; Matthew Joss; Kevin Embree
+
 Derived from code by Jeffrey Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres
 
 ### To set this up:
