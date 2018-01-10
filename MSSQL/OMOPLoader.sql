@@ -539,11 +539,11 @@ GO
 create procedure OMOPObservationPeriod as
 begin
 
-INSERT INTO [Observation_Period]([person_id], [observation_perioid_start_date], [observation_period_end_date], [period_type_concept_id] ) 
+INSERT INTO [Observation_Period]([person_id], [observation_period_start_date], [observation_period_end_date], [period_type_concept_id] ) 
     select x.patient_num patid, case when l.patient_num is not null then l.period_start else enr_start end enr_start_date
     , case when l.patient_num is not null then l.period_end when enr_end_end>enr_end then enr_end_end else enr_end end enr_end_date 
     , case when l.patient_num is not null then 44814725 else 44814724 end enr_basis from 
-    (select patient_num, min(start_date) enr_start,max(start_date) enr_end,max(end_date) enr_end_end from i2b2visit where patient_num in (select patid from pmndemographic) group by patient_num) x
+    (select patient_num, min(start_date) enr_start,max(start_date) enr_end,max(end_date) enr_end_end from i2b2visit where patient_num in (select person_id from person) group by patient_num) x
     left outer join i2b2loyalty_patients l on l.patient_num=x.patient_num
 
 end
