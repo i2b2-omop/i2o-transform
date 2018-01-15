@@ -9,9 +9,10 @@
 update concept set invalid_reason=null where invalid_reason=''
 
 -- Add source code for condition (note: leaves out dxs that end up in measurement or observation
+-- Note: change PMI.. to your vocabulary db
 update d set omop_sourcecode=concept_id
-from pcornet_diag d inner join concept as c
-on concept_code=pcori_basecode
+from pcornet_diag d inner join PMI..concept as c
+on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+1,200) -- jgk 1/15/18: old ontologies had ICD9: in pcori_basecode and it needs to be stripped
 where 
 --c.vocabulary_id in ('ICD9CM', 'ICD10CM') and  -- include all vocabs
 --c.invalid_reason IS NULL and -- commented out to include deprecated
@@ -43,9 +44,10 @@ and c2.domain_id='Condition'
 GO
 
 -- Add source code for procedure (note: run with +1 and +0 in substring to catch basecode variations)
+-- jgk 01-15-18: Not necessary, numbering is 1-based and not found returns 0
 update p set omop_sourcecode=concept_id
-from pcornet_proc p inner join concept as c
-on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+0,100)
+from pcornet_proc p inner join PMI..concept as c
+on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+1,100)
 where 
 c.domain_id='Procedure'
 
