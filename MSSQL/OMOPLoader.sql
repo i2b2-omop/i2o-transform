@@ -221,6 +221,16 @@ Alter Table drug_exposure
 Add drug_exposure_id Int Identity(1, 1)
 Go
 
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_observation_period') 
+	Alter table drug_exposure DROP constraint xpk_observation_period
+Go
+Alter Table observation_period Drop Column observation_period_id
+Go
+
+Alter Table observation_period
+Add observation_period_id Int Identity(1, 1)
+Go
+
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prep-to-transform code
@@ -510,9 +520,9 @@ insert into visit_occurrence(person_id,visit_occurrence_id,visit_start_date,visi
 		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
 select distinct v.patient_num, v.encounter_num,  
 	start_Date, 
-	cast(start_Date as time), 
+	cast(start_Date as datetime), 
 	(case when end_date is not null then end_date else start_date end) end_Date, 
-	(case when end_date is not null then cast(end_Date as time) else cast(start_date as time) end),  
+	(case when end_date is not null then cast(end_Date as datetime) else cast(start_date as datetime) end),  
 	'0', 
 (case when omop_enctype is not null then omop_enctype else '0' end) enc_type, '0', '44818518',v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
@@ -708,7 +718,7 @@ INSERT INTO dbo.[measurement]
 
 Select distinct m.patient_num, m.encounter_num, vital.i_loinc, 
 Cast(m.start_date as DATE) meaure_date,   
-CAST(CONVERT(char(5), M.start_date, 108) as TIME) measure_time,
+CAST(CONVERT(char(5), M.start_date, 108) as datetime) measure_time,
 '0', m.nval_num, m.units_cd, concat (tval_char, nval_num), 
 isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
 '44818701', '0', '0'
@@ -787,7 +797,7 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --isnull(lab.pcori_basecode, 'NI') LAB_PX,
 --'LC'  LAB_PX_TYPE,
 Cast(m.start_date as DATE) RESULT_DATE,   
-CAST(CONVERT(char(5), M.start_date, 108) as TIME) RESULT_TIME,
+CAST(CONVERT(char(5), M.start_date, 108) as datetime) RESULT_TIME,
 isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END, '0') RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
@@ -919,7 +929,7 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
-select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as time), m.end_date, cast(m.end_date as time), '0', null
+select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as datetime), m.end_date, cast(m.end_date as datetime), '0', null
 , refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
 , null, null, null, null
 , 0, m.Encounter_num, mo.C_BASECODE, null, null, units_cd
@@ -969,6 +979,146 @@ where (basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR
 
 end
 GO
+
+----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
+-- Era tables - contributed by Dr. George Hripcsak and the Columbia University Medical Center OMOP team
+-- Adds derived information into drug_era and condition_era tables, must be run after drug_exposure and condition_occurrence are populate
+-- NEW 01-15-18!
+----------------------------------------------------------------------------------------------------------------------------------------
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPera') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPera;
+GO
+create procedure OMOPera as
+begin
+
+with cteConditionTarget (CONDITION_OCCURRENCE_ID, PERSON_ID, CONDITION_CONCEPT_ID, CONDITION_TYPE_CONCEPT_ID, CONDITION_START_DATE, CONDITION_END_DATE) as
+(
+	select co.CONDITION_OCCURRENCE_ID, co.PERSON_ID, co.CONDITION_CONCEPT_ID, co.CONDITION_TYPE_CONCEPT_ID, co.CONDITION_START_DATE,
+		COALESCE(co.CONDITION_END_DATE, DATEADD(day,1,CONDITION_START_DATE)) as CONDITION_END_DATE
+	FROM dbo.CONDITION_OCCURRENCE co (nolock)
+),
+cteEndDates (PERSON_ID, CONDITION_CONCEPT_ID, END_DATE) as -- the magic
+(
+	select PERSON_ID, CONDITION_CONCEPT_ID, DATEADD(day,-30,EVENT_DATE) as END_DATE -- unpad the end date
+	FROM
+	(
+		select PERSON_ID, CONDITION_CONCEPT_ID, EVENT_DATE, EVENT_TYPE,
+		MAX(START_ORDINAL) OVER (PARTITION BY PERSON_ID, CONDITION_CONCEPT_ID ORDER BY EVENT_DATE, EVENT_TYPE ROWS UNBOUNDED PRECEDING) as START_ORDINAL, -- this pulls the current START down from the prior rows so that the NULLs from the END DATES will contain a value we can compare with
+		ROW_NUMBER() OVER (PARTITION BY PERSON_ID, CONDITION_CONCEPT_ID ORDER BY EVENT_DATE, EVENT_TYPE) AS OVERALL_ORD -- this re-numbers the inner UNION so all rows are numbered ordered by the event date
+		from
+		(
+			-- select the start dates, assigning a row number to each
+			Select PERSON_ID, CONDITION_CONCEPT_ID, CONDITION_START_DATE AS EVENT_DATE, -1 as EVENT_TYPE, ROW_NUMBER() OVER (PARTITION BY PERSON_ID, CONDITION_CONCEPT_ID ORDER BY CONDITION_START_DATE) as START_ORDINAL
+			from cteConditionTarget
+
+			UNION ALL
+
+			-- pad the end dates by 30 to allow a grace period for overlapping ranges.
+			select PERSON_ID, CONDITION_CONCEPT_ID, DATEADD(day,30,CONDITION_END_DATE), 1 as EVENT_TYPE, NULL
+			FROM cteConditionTarget
+		) RAWDATA
+	) E
+	WHERE (2 * E.START_ORDINAL) - E.OVERALL_ORD = 0
+),
+cteConditionEnds (PERSON_ID, CONDITION_CONCEPT_ID, CONDITION_TYPE_CONCEPT_ID, CONDITION_START_DATE, ERA_END_DATE) as
+(
+select
+	c.PERSON_ID,
+	c.CONDITION_CONCEPT_ID,
+	c.CONDITION_TYPE_CONCEPT_ID,
+	c.CONDITION_START_DATE,
+	MIN(e.END_DATE) as ERA_END_DATE
+FROM cteConditionTarget c
+JOIN cteEndDates e  on c.PERSON_ID = e.PERSON_ID and c.CONDITION_CONCEPT_ID = e.CONDITION_CONCEPT_ID and e.END_DATE >= c.CONDITION_START_DATE
+GROUP BY
+	c.PERSON_ID,
+	c.CONDITION_CONCEPT_ID,
+	c.CONDITION_TYPE_CONCEPT_ID,
+	c.CONDITION_START_DATE
+)
+-- Add INSERT statement here
+INSERT INTO dbo.condition_era(
+  condition_era_id,
+  person_id,
+  condition_concept_id,
+  condition_era_start_date,
+  condition_era_end_date,
+  condition_occurrence_count)
+select row_number() over (order by condition_concept_id), person_id, CONDITION_CONCEPT_ID, min(CONDITION_START_DATE) as CONDITION_ERA_START_DATE, ERA_END_DATE as CONDITION_ERA_END_DATE, COUNT(*) as CONDITION_OCCURRENCE_COUNT
+from cteConditionEnds 
+GROUP BY person_id, CONDITION_CONCEPT_ID, CONDITION_TYPE_CONCEPT_ID, ERA_END_DATE
+order by person_id, CONDITION_CONCEPT_ID
+;
+
+with cteDrugTarget (DRUG_EXPOSURE_ID, PERSON_ID, DRUG_CONCEPT_ID, DRUG_TYPE_CONCEPT_ID, DRUG_EXPOSURE_START_DATE, DRUG_EXPOSURE_END_DATE, INGREDIENT_CONCEPT_ID) as
+(
+-- Normalize DRUG_EXPOSURE_END_DATE to either the existing drug exposure end date, or add days supply, or add 1 day to the start date
+	select d.DRUG_EXPOSURE_ID, d. PERSON_ID, c.CONCEPT_ID, d.DRUG_TYPE_CONCEPT_ID, DRUG_EXPOSURE_START_DATE,
+		COALESCE(DRUG_EXPOSURE_END_DATE, DATEADD(day,DAYS_SUPPLY,DRUG_EXPOSURE_START_DATE), DATEADD(day,1,DRUG_EXPOSURE_START_DATE)) as DRUG_EXPOSURE_END_DATE,
+		c.CONCEPT_ID as INGREDIENT_CONCEPT_ID
+	FROM dbo.DRUG_EXPOSURE d (nolock)
+		join dbo.CONCEPT_ANCESTOR ca (nolock) on ca.DESCENDANT_CONCEPT_ID = d.DRUG_CONCEPT_ID
+		join dbo.CONCEPT c (nolock) on ca.ANCESTOR_CONCEPT_ID = c.CONCEPT_ID
+		where c.VOCABULARY_ID = 'RxNorm'
+		and c.CONCEPT_CLASS_ID = 'Ingredient'
+),
+cteEndDates (PERSON_ID, INGREDIENT_CONCEPT_ID, END_DATE) as -- the magic
+(
+	select PERSON_ID, INGREDIENT_CONCEPT_ID, DATEADD(day,-30,EVENT_DATE) as END_DATE -- unpad the end date
+	FROM
+	(
+		select PERSON_ID, INGREDIENT_CONCEPT_ID, EVENT_DATE, EVENT_TYPE,
+		MAX(START_ORDINAL) OVER (PARTITION BY PERSON_ID, INGREDIENT_CONCEPT_ID ORDER BY EVENT_DATE, EVENT_TYPE ROWS UNBOUNDED PRECEDING) as START_ORDINAL, -- this pulls the current START down from the prior rows so that the NULLs from the END DATES will contain a value we can compare with
+		ROW_NUMBER() OVER (PARTITION BY PERSON_ID, INGREDIENT_CONCEPT_ID ORDER BY EVENT_DATE, EVENT_TYPE) AS OVERALL_ORD -- this re-numbers the inner UNION so all rows are numbered ordered by the event date
+		from
+		(
+			-- select the start dates, assigning a row number to each
+			Select PERSON_ID, INGREDIENT_CONCEPT_ID, DRUG_EXPOSURE_START_DATE AS EVENT_DATE, -1 as EVENT_TYPE, ROW_NUMBER() OVER (PARTITION BY PERSON_ID, DRUG_CONCEPT_ID ORDER BY DRUG_EXPOSURE_START_DATE) as START_ORDINAL
+			from cteDrugTarget
+
+			UNION ALL
+
+			-- pad the end dates by 30 to allow a grace period for overlapping ranges.
+			select PERSON_ID, INGREDIENT_CONCEPT_ID, DATEADD(day,30,DRUG_EXPOSURE_END_DATE), 1 as EVENT_TYPE, NULL
+			FROM cteDrugTarget
+		) RAWDATA
+	) E
+	WHERE (2 * E.START_ORDINAL) - E.OVERALL_ORD = 0
+),
+cteDrugExposureEnds (PERSON_ID, DRUG_CONCEPT_ID, DRUG_TYPE_CONCEPT_ID, DRUG_EXPOSURE_START_DATE, DRUG_ERA_END_DATE) as
+(
+select
+	d.PERSON_ID,
+	d.INGREDIENT_CONCEPT_ID,
+	d.DRUG_TYPE_CONCEPT_ID,
+	d.DRUG_EXPOSURE_START_DATE,
+	MIN(e.END_DATE) as ERA_END_DATE
+FROM cteDrugTarget d
+JOIN cteEndDates e  on d.PERSON_ID = e.PERSON_ID and d.INGREDIENT_CONCEPT_ID = e.INGREDIENT_CONCEPT_ID and e.END_DATE >= d.DRUG_EXPOSURE_START_DATE
+GROUP BY d.DRUG_EXPOSURE_ID,
+	d.PERSON_ID,
+	d.INGREDIENT_CONCEPT_ID,
+	d.DRUG_TYPE_CONCEPT_ID,
+	d.DRUG_EXPOSURE_START_DATE
+)
+-- Add INSERT statement here
+INSERT INTO dbo.drug_era (
+  drug_era_id,
+  person_id,
+  drug_concept_id,
+  drug_era_start_date,
+  drug_era_end_date,
+  drug_exposure_count)
+select row_number() over (order by drug_concept_id), person_id, drug_concept_id, min(DRUG_EXPOSURE_START_DATE) as DRUG_ERA_START_DATE, DRUG_ERA_END_DATE, COUNT(*) as DRUG_EXPOSURE_COUNT
+from cteDrugExposureEnds
+GROUP BY person_id, drug_concept_id, drug_type_concept_id, DRUG_ERA_END_DATE
+order by person_id, drug_concept_id
+;
+
+end
+GO
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -981,6 +1131,9 @@ create procedure OMOPclear
 as 
 begin
 
+DELETE FROM drug_era
+DELETE FROM condition_era
+DELETE FROM observation_period
 DELETE FROM condition_occurrence
 DELETE FROM drug_exposure
 DELETE FROM measurement
@@ -1010,6 +1163,7 @@ exec OMOPdiagnosis
 exec OMOPvital
 exec OMOPlabResultCM
 exec OMOPprocedure
+exec OMOPera
 --exec OMOPreport
 
 end
