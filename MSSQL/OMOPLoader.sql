@@ -842,13 +842,6 @@ IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdrug_exp
 GO
 create procedure OMOPdrug_exposure as
 begin
-select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, pxsource.pcori_basecode dxsource, pxsource.c_fullname
- into #procedurefact
-from i2b2fact factline
-inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
-inner join PCORNET_PROC pxsource on factline.concept_cd =pxsource.c_basecode  
-where pxsource.c_fullname like '\PCORI\PROCEDURE\%'
-
 
 -- Griffin's optimization: use temp tables rather than left joining directly - 12/9/15
     select pcori_basecode,c_fullname,instance_num,start_date,basis.provider_id,concept_cd,encounter_num,modifier_cd
