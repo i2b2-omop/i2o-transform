@@ -631,13 +631,6 @@ begin
 ---------------------------------------
 -- Copied and tweaked from condition_ocurrence procedure 'OMOPDiagnosis'
 ---------------------------------------
--- Optimized to use temp tables, not views. 
-select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, pxsource.pcori_basecode dxsource, pxsource.c_fullname
- into #procedurefact
-from i2b2fact factline
-inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
-inner join PCORNET_PROC pxsource on factline.concept_cd =pxsource.c_basecode  
-where pxsource.c_fullname like '\PCORI\PROCEDURE\%'
 
 ---------------------- Old PCORI Columns----------------------------------------------------------
 --				patid,			encounterid,	enc_type, admit_date, providerid, px, px_type, px_source,px_date) 
@@ -672,13 +665,8 @@ from i2b2fact fact
 -- Q: Which procedures are primary and which are secondary and which are unknown
 ---------- For the moment setting everything unknown
 -----------------------------------------------------------
-left outer join #procedurefact pf
-	on fact.patient_num = pf.patient_num
-	and fact.encounter_num = pf.encounter_num
-	and fact.provider_id = pf.provider_id
-	and fact.concept_cd = pf.concept_cd
-	and fact.start_date = pf.START_DATE
-where pf.c_fullname like '\PCORI\PROCEDURE\%'
+
+where c_fullname like '\PCORI\PROCEDURE\%'
 
 end
 go
