@@ -1157,3 +1157,127 @@ exec OMOPera
 
 end
 go
+
+
+
+-------REPORT---------
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'omopReport') AND type in (N'P', N'PC')) DROP PROCEDURE omopReport
+go
+CREATE PROCEDURE [dbo].[omopReport] 
+as
+declare @i2b2vitald numeric
+declare @i2b2dxd numeric
+declare @i2b2cond numeric
+declare @i2b2pxd numeric
+declare @i2b2encountersd numeric
+declare @i2b2pats  numeric
+declare @i2b2Encounters numeric
+declare @i2b2facts numeric
+declare @i2b2dxs numeric
+declare @i2b2procs numeric
+declare @i2b2lcs numeric
+declare @pmnpats  numeric
+declare @pmnencounters numeric
+declare @pmndx numeric
+declare @pmnprocs numeric
+declare @pmnfacts numeric
+declare @pmnenroll numeric
+declare @pmnvital numeric
+declare @pmnlabs numeric
+declare @pmnprescribings numeric
+declare @pmndispensings numeric
+declare @pmncond numeric
+declare @pmnencountersd numeric
+declare @pmndxd numeric
+declare @pmnprocsd numeric
+declare @pmnfactsd numeric
+declare @pmnenrolld numeric
+declare @pmnvitald numeric
+declare @pmnlabsd numeric
+declare @pmnprescribingsd numeric
+declare @pmndispensingsd numeric
+declare @pmncondd numeric
+declare @runid numeric
+begin
+select @i2b2Pats =count(*)  from i2b2patient
+select @i2b2Encounters=count(*)   from i2b2visit i inner join person d on i.patient_num=d.person_id
+--select @i2b2Facts=count(*)   from i2b2fact where concept_Cd like 'ICD9%'
+-- Counts in PMN tables
+select @pmnPats=count(*)   from person
+select @pmnencounters=count(*)   from visit_occurrence e 
+select @pmndx=count(*)   from condition_occurrence
+select @pmnprocs =count(*)  from procedure_occurrence
+--select @pmncond=count(*) from pmncondition   --------- What to do with these pmncondition variables?
+--select @pmnenroll =count(*)  from pmnenrollment  --------- What to do with these pmnenrollment variables?
+select @pmnvital =count(*)  from measurement  ---vitals are in measurement right? Might need to change this to keep labs out
+select @pmnlabs =count(*)  from measurement   ---labs are in measurement right? Might need to change this to keep vitals out
+select @pmnprescribings =count(*)  from drug_exposure
+--select @pmndispensings =count(*)  from pmndispensing
+-- Distinct patients in PMN tables
+select @pmnencountersd=count(distinct person_id)  from visit_occurrence e 
+select @pmndxd=count(distinct person_id)   from condition_occurrence
+select @pmnprocsd =count(distinct person_id)  from procedure_occurrence
+--select @pmncondd=count(distinct person_id) from pmncondition  ---use condtion_occurrence         --------- What to do with these pmncondition variables?
+--select @pmnenrolld =count(distinct person_id)  from pmnenrollment      --------- What to do with these pmnenrollment variables?
+select @pmnvitald =count(distinct person_id)  from measurement      ---vitals are in measurement right? Might need to change this to keep labs out
+select @pmnlabsd =count(distinct person_id)  from measurement       ---labs are in measurement right? Might need to change this to keep vitals out
+select @pmnprescribingsd =count(distinct person_id)  from drug_exposure
+-- select @pmndispensingsd =count(distinct person_id)  from pmndispensing
+-- Distinct patients in i2b2 (unfinished)
+select @i2b2pxd=count(distinct patient_num) from i2b2fact fact
+ inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
+where pr.c_fullname like '\PCORI\PROCEDURE\%'
+select  patient_num, encounter_num, provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
+ into #sourcefact
+from i2b2fact factline
+inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
+where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
+select @i2b2dxd=count(distinct factline.patient_num) from i2b2fact factline
+ left outer join #sourcefact sf
+on	factline.patient_num=sf.patient_num
+and factline.encounter_num=sf.encounter_num
+and factline.provider_id=sf.provider_id
+and factline.concept_cd=sf.concept_Cd
+and factline.start_date=sf.start_Date 
+ inner join	pcornet_diag dx on dx.c_basecode  = factline.concept_cd   
+where dx.c_fullname like '\PCORI\DIAGNOSIS\%' 
+and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
+select @i2b2cond=count(distinct factline.patient_num) from i2b2fact factline
+ left outer join #sourcefact sf
+on	factline.patient_num=sf.patient_num
+and factline.encounter_num=sf.encounter_num
+and factline.provider_id=sf.provider_id
+and factline.concept_cd=sf.concept_Cd
+and factline.start_date=sf.start_Date 
+ inner join	pcornet_diag dx on dx.c_basecode  = factline.concept_cd   
+where dx.c_fullname like '\PCORI\DIAGNOSIS\%' 
+and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\CONDITION_SOURCE\%')
+-- Counts in i2b2
+/*select @i2b2pxde=count(distinct patient_num) from i2b2fact fact
+ inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
+ inner join pmnENCOUNTER enc on enc.patid = fact.patient_num and enc.encounterid = fact.encounter_Num
+where pr.c_fullname like '\PCORI\PROCEDURE\%'*/
+/*select @i2b2dxd=count(distinct patient_num) from i2b2fact fact
+ inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
+where pr.c_fullname like '\PCORI\PROCEDURE\%'
+select @i2b2vitald=count(distinct patient_num) from i2b2fact fact
+ inner join	pcornet_proc pr on pr.c_basecode  = fact.concept_cd   
+where pr.c_fullname like '\PCORI\PROCEDURE\%'
+*/
+select @i2b2encountersd=count(distinct patient_num) from i2b2visit 
+select @runid = max(runid) from i2pReport
+set @runid = @runid + 1
+insert into i2pReport select @runid, getdate(), 'Pats',			@i2b2pats, @i2b2pats,		@pmnpats,			null
+--insert into i2pReport select @runid, getdate(), 'Enrollment',	@i2b2pats, @i2b2pats,		@pmnenroll,			@pmnenrolld
+insert into i2pReport select @runid, getdate(), 'Encounters',	@i2b2Encounters,null,@pmnEncounters,		@pmnEncountersd
+insert into i2pReport select @runid, getdate(), 'DX',		null,@i2b2dxd,@pmndx,	@pmndxd
+insert into i2pReport select @runid, getdate(), 'PX',		null,@i2b2pxd,@pmnprocs,	@pmnprocsd
+--insert into i2pReport select @runid, getdate(), 'Condition',		null,@i2b2cond,		@pmncond,	@pmncondd
+insert into i2pReport select @runid, getdate(), 'Vital',		null,@i2b2vitald,		@pmnvital,	@pmnvitald
+insert into i2pReport select @runid, getdate(), 'Labs',		null,null,		@pmnlabs,	@pmnlabsd
+insert into i2pReport select @runid, getdate(), 'Prescribing',		null,null,	@pmnprescribings,	@pmnprescribingsd
+--insert into i2pReport select @runid, getdate(), 'Dispensing',		null,null,	@pmndispensings,	@pmndispensingsd
+select concept 'Data Type',sourceval 'From i2b2',sourcedistinct 'Patients in i2b2' ,  destval 'In PopMedNet', destdistinct 'Patients in PopMedNet' from i2preport where runid=@runid
+end
+GO

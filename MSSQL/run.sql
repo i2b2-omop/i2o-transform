@@ -48,7 +48,7 @@ delete from visit_occurrence
 GO
 exec OMOPencounter
 GO
-delete from OMOPobservationperiod
+delete from observation_period
 GO
 exec OMOPobservationperiod
 GO
@@ -76,5 +76,8 @@ delete from condition_era
 GO
 exec OMOPera
 GO
-
+delete from i2pReport
+GO
+exec omopReport
+GO
 select * from i2pReport;
