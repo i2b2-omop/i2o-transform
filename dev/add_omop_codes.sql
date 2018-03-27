@@ -49,7 +49,7 @@ update p set omop_sourcecode=concept_id
 from pcornet_proc p inner join PMI..concept as c
 on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+1,100)
 where 
-c.domain_id='Procedure'
+c.domain_id='Procedure' 
 
 -- Fill in OMOP basecode for Procedure
 -- update d set omop_basecode=c1.concept_id
@@ -82,7 +82,7 @@ insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
 select omop_sourcecode, c2.concept_id,c2.domain_id
 from pcornet_lab d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept�c2 ON c2.concept_id =cr.concept_id_2
+inner join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Measurement'
@@ -126,7 +126,29 @@ and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Drug'
 
+-- Procedure dumps a lot into observation and measurement. Add a column with target table and then add source codes to procedures.
+ALTER TABLE [dbo].[pcornet_proc]
+	ADD [OMOP_TARGETTABLE] varchar(35) NULL
+GO
+update pcornet_proc set omop_targettable='PROCEDURE_OCCURRENCE' where omop_sourcecode is not null and OMOP_TARGETTABLE IS NULL
+GO
+update p set omop_sourcecode=concept_id,omop_targettable=domain_id
+from pcornet_proc p inner join concept as c
+on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+1,100)
+where 
+vocabulary_id in ('CPT4','HCPCS') and c.domain_id!='Procedure'
+GO
+
 --- WORKSPACE -----
+/*
+
+--- Loook for missing pocedure omop codes
+select * from pcornet_proc where OMOP_SOURCECODE is  null and c_synonym_cd='N'--and 
+select * from pcornet_proc where OMOP_TARGETTABLE!='PROCEDURE_OCCURRENCE'
+select * from concept where vocabulary_id='CPT4' and concept_code in ('31505','44128','25248') 
+select * from pcornet_proc where substring(pcori_basecode,charindex(':',pcori_basecode)+1,100)  in ('31505','44128','25248')
+
+
 select * from i2o_mapping where domain_id='Drug'
 
 
@@ -219,4 +241,5 @@ select distinct c1.concept_class_id,relationship_id,c2.concept_class_id
 from pcornet_proc d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1
 inner join concept�c2 ON c2.concept_id =cr.concept_id_2
-where c_fullname like '%\09\%'
+where c_fullname like '%\09\%' 
+*/

@@ -674,7 +674,7 @@ from i2b2fact fact
 ---------- For the moment setting everything unknown
 -----------------------------------------------------------
 
-where c_fullname like '\PCORI\PROCEDURE\%'
+where c_fullname like '\PCORI\PROCEDURE\%' and omop_targettable='PROCEDURE_OCCURRENCE' -- this column was added 3/27/18
 
 end
 go
