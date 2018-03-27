@@ -1108,6 +1108,36 @@ order by person_id, drug_concept_id
 end
 GO
 
+
+
+-------------------------------------------------------------------------------------------------------------------------
+--DEATH
+-------------------------------------------------------------------------------------------------------------------------
+
+
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPDeath') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPDeath
+go
+
+create procedure OMOPDeath as
+
+begin
+insert into death( person_id,	death_date, death_date_impute, death_source,death_match_confidence) --need to update these: insert into death(person_id, death_date, death_datetime, death_type_concept_id, cause_concept_id, cause_source_value, cause_source_concept_id)
+select  distinct pat.patient_num, pat.death_date, case 
+when vital_status_cd like 'X%' then 'B'
+when vital_status_cd like 'M%' then 'D'
+when vital_status_cd like 'Y%' then 'N'
+else 'OT'	
+end, 'NI','NI'
+from i2b2patient pat
+where (pat.death_date is not null or vital_status_cd like 'Z%') and pat.patient_num in (select person_id from person)
+
+end
+go
+
+
+
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
