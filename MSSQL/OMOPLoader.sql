@@ -1154,13 +1154,8 @@ go
 create procedure OMOPDeath as
 
 begin
-insert into death( person_id,	death_date, death_date_impute, death_source,death_match_confidence) --need to update these: insert into death(person_id, death_date, death_datetime, death_type_concept_id, cause_concept_id, cause_source_value, cause_source_concept_id)
-select  distinct pat.patient_num, pat.death_date, case 
-when vital_status_cd like 'X%' then 'B'
-when vital_status_cd like 'M%' then 'D'
-when vital_status_cd like 'Y%' then 'N'
-else 'OT'	
-end, 'NI','NI'
+insert into death( person_id,	death_date,  death_type_concept_id)
+select  distinct pat.patient_num, pat.death_date, '38003569'
 from i2b2patient pat
 where (pat.death_date is not null or vital_status_cd like 'Z%') and pat.patient_num in (select person_id from person)
 
