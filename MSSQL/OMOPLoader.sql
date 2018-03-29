@@ -622,7 +622,8 @@ and factline.provider_id=pf.provider_id
 and factline.concept_cd=pf.concept_cd
 and factline.start_date=pf.start_Date 
 inner join pcornet_diag diag on diag.c_basecode  = factline.concept_cd
-inner join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Condition'
+left join i2o_mapping omap on diag.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Condition'
+-- jgk 3/29/18 - left join to include codes with no standard mapping
 -- Skip ICD-9 V codes in 10 ontology, ICD-9 E codes in 10 ontology, ICD-10 numeric codes in 10 ontology
 -- Note: makes the assumption that ICD-9 Ecodes are not ICD-10 Ecodes; same with ICD-9 V codes. On inspection seems to be true.
 where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
@@ -630,6 +631,8 @@ where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
   and not ( diag.pcori_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
   and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.pcori_basecode like '[0-9]%') )) 
 --and (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null)
+
+and diag.omop_sourcecode is not null
 
 end
 go
@@ -933,7 +936,7 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , drug_exposure_start_datetime -----> i2b2fact visit_start_date ---------------------------------> Done
 , drug_exposure_end_date  -----------> i2b2fact end_end ------------------------------------> Done
 , drug_exposure_end_datetime  ----------->  i2b2fact end_end --------------------------------> Done
-, drug_type_concept_id -------> physician admistered, prescription, Inpatient... how do we know the difference?----This is a modifier called event \PCORI_MOD\RX_BASIS\DI and RX_BASIS\PR----> NOT DONE
+, drug_type_concept_id -------> jgk 32918 added prescribed & dispensed... there are more variants ----> NOT DONE
 , stop_reason ------------------> Reason the drug was stoppped varchar(20) ... Do we have this?---> NO
 , refills   --------------------------> from ontology \PCORI_MOD\RX_REFILLS\ ----------------> Done
 , quantity	--------------------------> from ontology \PCORI_MOD\RX_QUANTITY ----------------> Done
@@ -950,14 +953,20 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
-select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime), '0', null
+select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
+ case 
+   when basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%' then '38000177'
+   when basis.c_fullname like '\PCORI_MOD\RX_BASIS\DI\%' then '38000175'
+ end
+, null
 , refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
 , null, null
 , 0, m.Encounter_num, mo.C_BASECODE, null, null, units_cd
  from i2b2fact m
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
- inner join i2o_mapping omap on mo.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Drug'
+-- Note the only reason we need i2o_mapping is to figure which are standard codes, sourcecode already comes from RxCui
+ left join i2o_mapping omap on mo.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Drug'
 
 -- TODO: This join adds several minutes to the load - must be debugged
 
@@ -995,8 +1004,8 @@ select distinct m.patient_num, omap.concept_id, m.start_date, cast(m.start_Date 
     and m.start_date = supply.start_date
     and m.provider_id = supply.provider_id
     and m.instance_num = supply.instance_num
-
-where (basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%')
+    
+    where mo.omop_sourcecode is not null
 
 end
 GO
