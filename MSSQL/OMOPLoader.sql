@@ -744,10 +744,10 @@ INSERT INTO dbo.[measurement]
       ,[provider_id]
       ,[operator_concept_id])
 
-Select distinct m.patient_num, m.encounter_num, vital.i_loinc, 
+Select distinct m.patient_num, m.encounter_num, substring(vital.i_loinc, 1, 50), 
 Cast(m.start_date as DATE) meaure_date,   
 CAST(CONVERT(char(5), M.start_date, 108) as datetime) measure_time,
-'0', m.nval_num, m.units_cd, concat (tval_char, nval_num), 
+'0', m.nval_num, substring(m.units_cd, 1, 50), substring(concat (tval_char, nval_num), 1, 50), 
 isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
 '44818701', '0', '0'
 from i2b2fact m
