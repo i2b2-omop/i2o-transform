@@ -121,7 +121,7 @@ create view i2b2loyalty_patients as
 ELSE
 SET @SQL='
 create view i2b2loyalty_patients as
-(select top 0 patient_num,cast(''2010/1/1'' as datetime) period_start,cast(''2010/1/1'' as datetime) period_end from i2b2patient_list)'
+(select top 0 patient_num,cast(''2010/1/1'' as datetime) period_start,cast(''2010/1/1'' as datetime) period_end from i2b2patient)'
 
 EXEC(@SQL)
 GO
