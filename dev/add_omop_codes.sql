@@ -70,7 +70,7 @@ and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Procedure'
 
--- Add source code for lab (note: run with +1 and +0 in substring to catch basecode variations)
+-- Add source code for lab 
 update p set omop_sourcecode=concept_id
 from pcornet_lab p inner join concept as c
 on concept_code=pcori_basecode
@@ -141,6 +141,17 @@ GO
 
 --- WORKSPACE -----
 /*
+
+-- Partners specific, find changes between old and newer ontology mapping
+select c.c_fullname,c.c_name,c.pcori_basecode,o.PCORI_BASECODE from pcornet_master_vw c inner join pcori_mart_112016..pcornet_master_vw o on o.C_FULLNAME=c.c_fullname
+ where (c.PCORI_BASECODE!=o.PCORI_BASECODE or ((c.pcori_basecode is null or c.pcori_basecode='') and o.pcori_basecode is not null))
+ and o.pcori_basecode not like 'LP%' and c.c_fullname not like '\PCORI_MOD%' and o.PCORI_BASECODE!='@'
+ 
+ update c set c.PCORI_BASECODE=o.PCORI_BASECODE 
+from scilhs_lab c
+inner join pcori_mart_112016..scilhs_lab o on o.C_FULLNAME=c.c_fullname
+where c.PCORI_BASECODE!=o.PCORI_BASECODE  and o.pcori_basecode not like 'LP%' and c.c_fullname not like '\PCORI_MOD%' and o.PCORI_BASECODE!='@'
+
 
 --- Loook for missing pocedure omop codes
 select * from pcornet_proc where OMOP_SOURCECODE is  null and c_synonym_cd='N'--and 
