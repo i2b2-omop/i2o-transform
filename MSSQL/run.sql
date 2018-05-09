@@ -76,6 +76,10 @@ delete from condition_era
 GO
 exec OMOPera
 GO
+delete from observation
+GO
+exec OMOPobservation
+GO
 delete from i2pReport
 GO
 exec omopReport
