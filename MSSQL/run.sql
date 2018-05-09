@@ -76,6 +76,10 @@ delete from condition_era
 GO
 exec OMOPera
 GO
+delete from death
+GO
+exec OMOPdeath
+GO
 delete from observation
 GO
 exec OMOPobservation
