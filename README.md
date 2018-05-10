@@ -10,7 +10,7 @@ Presently this is an alpha version!
 
 ### To set this up:
 1. Create a database for your OMOP tables and perform the next three major numbered steps on that database.
-2. Download the [OMOP DDL](https://github.com/OHDSI/CommonDataModel) to create the OMOP tables.
+2. Download the [OMOP DDL](https://github.com/OHDSI/CommonDataModel) to create the OMOP tables. This has been tested with OMOP 5.2.
 3. Download and import the [i2o-mapping table](https://github.com/i2b2-omop/i2o-transform/blob/master/MSSQL/i2o_mapping.csv), which contains a subset of the OMOP concept dictionary needed by the transform script.
 3. Download and run the [MSSQL version](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) of the transform. (Oracle version not currently available.)
     1. Create a database for your OMOP tables and run the OMOP DDL there. Our transform requires that they be on the same server as your i2b2 instance - though you can move them later.
