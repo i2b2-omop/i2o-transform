@@ -743,7 +743,8 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- Procedures - by Aaron Abend and Jeff Klann and Matthew Joss and Kevin Embree
+-- Procedures - by Jeff Klann and Aaron Abend and Matthew Joss and Kevin Embree
+-- NEW VERSION 5/18 now grabs mappings from the OMOP vocab tables on the fly!
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
@@ -751,6 +752,32 @@ go
 create procedure OMOPprocedure as
 
 begin
+
+-- Create on-the-fly vocab mappings
+select c_basecode, substring(pcori_basecode,charindex(':',pcori_basecode)+1,200) pcori_basecode, c.concept_code, c.vocabulary_id, c.domain_id,c.concept_id, c2.concept_code mapped_code, c2.vocabulary_id mapped_vocabulary, c2.domain_id mapped_domain,c2.concept_id mapped_id into #concept_map
+from pcornet_proc p inner join concept as c
+on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+1,200) -- old ontologies had ICD9: in pcori_basecode and it needs to be stripped
+and vocabulary_id=case dbo.stringpart(c_fullname,'\',2) when '09' THEN 'ICD9Proc' when '10' THEN 'ICD10PCS' WHEN 'CH' THEN 
+ case dbo.stringpart(c_fullname,'\',3) when 'HC' THEN 'HCPCS' ELSE 'CPT4' END END
+left join  concept_relationship cr  ON c.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+left join concept c2 ON c2.concept_id =cr.concept_id_2
+and c2.standard_concept ='S'
+and c2.invalid_reason is null
+where c_synonym_cd='N'
+-- still want old codes -- and c.invalid_reason is NULL
+
+/* Interesting discovery: OMOP deletes mappings from concept_relationship for deleted CPT codes. CPT codes are deleted regularly. They still live in concept and self-mappings are legal for CPT and ICD in Procedure. So we create
+ self-mappings to them rather than null mappings. This increases our total procedures to > last version. */
+select * into #concept_map_px from
+(select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id from #concept_map 
+  where (domain_id='Procedure' or mapped_domain='Procedure') and mapped_id is not null ) x
+insert into #concept_map_px(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
+select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id from #concept_map 
+  where domain_id='Procedure'and concept_id not in (select concept_id from #concept_map_px)  and mapped_id is not null 
+insert into #concept_map_px(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
+select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, concept_code mapped_code, vocabulary_id mapped_vocabulary, domain_id mapped_domain, concept_id mapped_id from #concept_map 
+  where domain_id='Procedure' and vocabulary_id in ('CPT4','ICD10PCS') and concept_id not in (select concept_id from #concept_map_px) 
+create index concept_map_px_idx on #concept_map_px(c_basecode)
 
 ---------------------------------------
 -- Copied and tweaked from condition_ocurrence procedure 'OMOPDiagnosis'
@@ -776,21 +803,24 @@ insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_da
 -- procedure_source_value ----------> PCORI base code from ontology -------------------------------> Done
 -- procuedure_source_concept_id ----> OMOP source code from ontology ------------------------------> Done
 -- qualifier_source_value ----------> The source code for the qualifier as it appears in the source data. What is this?????????????
-select  distinct fact.patient_num, isnull(omap.concept_id, '0'), enc.visit_start_date, 0, 0, null, 0, fact.encounter_num, pproc.PCORI_BASECODE, pproc.OMOP_SOURCECODE, null, fact.start_date
+select  distinct fact.patient_num, isnull(prc.mapped_id, '0'), fact.start_date, 0, 0, null, 0, fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id, null, fact.start_date
 from i2b2fact fact
 ---------------------------------------------------------
 -- For every procedure there must be a corresponding visit
 -----------------------------------------------------------
- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
+/* inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
  inner join PCORNET_PROC pproc on pproc.c_basecode = fact.concept_cd
- inner join i2o_mapping omap on pproc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Procedure'
+ inner join i2o_mapping omap on pproc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Procedure'*/
+ inner join #concept_map_px prc on prc.c_basecode = fact.concept_cd and (prc.mapped_domain='Procedure' or prc.domain_id='Procedure')
+ 
 -----------------------------------------------------------
 -- look for observation facts that are procedures
 -- Q: Which procedures are primary and which are secondary and which are unknown
 ---------- For the moment setting everything unknown
 -----------------------------------------------------------
 
-where c_fullname like '\PCORI\PROCEDURE\%' and omop_targettable='PROCEDURE_OCCURRENCE' -- this column was added 3/27/18
+--where c_fullname like '\PCORI\PROCEDURE\%' 
+--and omop_targettable='PROCEDURE_OCCURRENCE' -- this column was added 3/27/18
 
 end
 go
@@ -1290,16 +1320,16 @@ create procedure OMOPclear
 as 
 begin
 
-DELETE FROM observation
-DELETE FROM drug_era
-DELETE FROM condition_era
-DELETE FROM observation_period
-DELETE FROM condition_occurrence
-DELETE FROM drug_exposure
-DELETE FROM measurement
-DELETE FROM procedure_occurrence
-DELETE FROM visit_occurrence
-DELETE FROM person
+TRUNCATE TABLE observation
+TRUNCATE TABLE drug_era
+TRUNCATE TABLE condition_era
+TRUNCATE TABLE observation_period
+TRUNCATE TABLE condition_occurrence
+TRUNCATE TABLE drug_exposure
+TRUNCATE TABLE measurement
+TRUNCATE TABLE procedure_occurrence
+TRUNCATE TABLE visit_occurrence
+TRUNCATE TABLE person
 
 end
 go
