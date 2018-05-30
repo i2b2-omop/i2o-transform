@@ -776,7 +776,7 @@ select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concep
   where domain_id='Procedure'and concept_id not in (select concept_id from #concept_map_px)  and mapped_id is not null 
 insert into #concept_map_px(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
 select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, concept_code mapped_code, vocabulary_id mapped_vocabulary, domain_id mapped_domain, concept_id mapped_id from #concept_map 
-  where domain_id='Procedure' and vocabulary_id in ('CPT4','ICD10PCS') and concept_id not in (select concept_id from #concept_map_px) 
+  where domain_id='Procedure' and vocabulary_id in ('CPT4','ICD10PCS','HCPCS') and concept_id not in (select concept_id from #concept_map_px) 
 create index concept_map_px_idx on #concept_map_px(c_basecode)
 
 ---------------------------------------
@@ -827,25 +827,90 @@ go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- Observation - by Jeff Klann, adapted from procedure
--- To be expanded, presently only supports procedure ontology items that should be observations
--- Note that we insert OMOP_SOURCECODE and don't use i2o_mapping because HCPCS and CPT4 are 'standard' codes that don't need to be mapped
+-- Procedure Seconday - by Jeff Klann, adapted from procedure
+-- Insert procedures into observation, measurement, drug, dx tables
+-- Device not supported - not required by AllOfUs at the moment
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPobservation') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPobservation
 go
 
-create procedure OMOPobservation as
+create procedure OMOPprocedure_secondary as
 
 begin
 
-insert into dbo.observation(person_id,observation_concept_id,observation_date, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id)
+-- Create on-the-fly vocab mappings
+select c_basecode, substring(pcori_basecode,charindex(':',pcori_basecode)+1,200) pcori_basecode, c.concept_code, c.vocabulary_id, c.domain_id,c.concept_id, c2.concept_code mapped_code, c2.vocabulary_id mapped_vocabulary, c2.domain_id mapped_domain,c2.concept_id mapped_id into #concept_map
+from pcornet_proc p inner join concept as c
+on concept_code=substring(pcori_basecode,charindex(':',pcori_basecode)+1,200) -- old ontologies had ICD9: in pcori_basecode and it needs to be stripped
+and vocabulary_id=case dbo.stringpart(c_fullname,'\',2) when '09' THEN 'ICD9Proc' when '10' THEN 'ICD10PCS' WHEN 'CH' THEN 
+ case dbo.stringpart(c_fullname,'\',3) when 'HC' THEN 'HCPCS' ELSE 'CPT4' END END
+left join  concept_relationship cr  ON c.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+left join concept c2 ON c2.concept_id =cr.concept_id_2
+and c2.standard_concept ='S'
+and c2.invalid_reason is null
+where c_synonym_cd='N'
 
-select  distinct fact.patient_num, isnull(pproc.OMOP_SOURCECODE, '0'), fact.start_date, 38000280 -- observation recorded from EHR
-  , 0, pproc.PCORI_BASECODE, pproc.OMOP_SOURCECODE from i2b2fact fact
- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
- inner join PCORNET_PROC pproc on pproc.c_basecode = fact.concept_cd
+-- Update observation table ---
+-- When mapped domain is not present, use unmapped code if it is CPT4, ICD-10, or HCPCS - these that do not have mappings are standard codes
+select * into #concept_map_obs from
+(select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id from #concept_map 
+  where mapped_domain='Observation' ) x
+insert into #concept_map_obs(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
+select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, concept_code mapped_code, vocabulary_id mapped_vocabulary, domain_id mapped_domain, concept_id mapped_id from #concept_map 
+  where domain_id='Observation' and vocabulary_id in ('CPT4','ICD10PCS','HCPCS') and concept_id not in (select concept_id from #concept_map_obs) 
+create index concept_map_obs_idx on #concept_map_obs(c_basecode)
+insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
+select  distinct fact.patient_num, case prc.mapped_domain when 'Observation' then prc.mapped_id else '0' END, fact.start_date, 38000280 -- observation recorded from EHR
+  , 0, prc.PCORI_BASECODE, prc.concept_id, fact.encounter_num from i2b2fact fact
+ -- not tied to encounters-- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
+inner join #concept_map_obs prc on prc.c_basecode = fact.concept_cd
 
-where c_fullname like '\PCORI\PROCEDURE\%' and omop_targettable='observation' -- this column was added 3/27/18
+-- Next, update measurement table ---
+-- Millions of records (7k codes) get thrown into here - measurements like PTT that we have no value for
+select * into #concept_map_meas from
+(select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id from #concept_map 
+  where mapped_domain='Measurement' ) x
+insert into #concept_map_meas(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
+select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, concept_code mapped_code, vocabulary_id mapped_vocabulary, domain_id mapped_domain, concept_id mapped_id from #concept_map 
+  where domain_id='Measurement' and vocabulary_id in ('CPT4','ICD10PCS','HCPCS') and concept_id not in (select concept_id from #concept_map_meas) 
+create index concept_map_mea_idx on #concept_map_meas(c_basecode)
+INSERT INTO [dbo].[measurement] with(tablock) ([person_id], [measurement_concept_id], [measurement_date], [measurement_datetime], [measurement_type_concept_id], [provider_id], [visit_occurrence_id], [measurement_source_value], [measurement_source_concept_id]) 
+select  distinct fact.patient_num, case prc.mapped_domain when 'Measurement' then prc.mapped_id else '0' END, fact.start_date, fact.start_date, 45754907 -- derived value. Other option is 5001, test ordered through EHR 
+  , 0, fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id from i2b2fact fact
+ -- not tied to encounters-- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
+inner join #concept_map_meas prc on prc.c_basecode = fact.concept_cd
+
+-- Next, update dx table ---
+select * into #concept_map_dx from
+(select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id from #concept_map 
+  where mapped_domain='Condition' ) x
+insert into #concept_map_dx(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
+select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, concept_code mapped_code, vocabulary_id mapped_vocabulary, domain_id mapped_domain, concept_id mapped_id from #concept_map 
+  where domain_id='Condition' and vocabulary_id in ('CPT4','ICD10PCS','HCPCS') and concept_id not in (select concept_id from #concept_map_dx) 
+create index concept_map_mea_idx on #concept_map_dx(c_basecode)
+insert into condition_occurrence with (tablock) (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
+select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, 
+case diag.mapped_domain when 'Condition' then diag.mapped_id else '0' END,  5086, -- Condition tested for by diagnostic procedure
+end_date, pcori_basecode, diag.concept_id, factline.start_date
+from i2b2fact factline
+inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
+inner join #concept_map_dx diag on diag.c_basecode = factline.concept_cd 
+
+-- Next, update drug table
+-- These are all (apparently) entries for vaccines
+select * into #concept_map_rx from
+(select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id from #concept_map 
+  where mapped_domain='Drug' ) x
+insert into #concept_map_rx(c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, mapped_code, mapped_vocabulary, mapped_domain, mapped_id)
+select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concept_id, concept_code mapped_code, vocabulary_id mapped_vocabulary, domain_id mapped_domain, concept_id mapped_id from #concept_map 
+  where domain_id='Drug' and vocabulary_id in ('CPT4','ICD10PCS','HCPCS') and concept_id not in (select concept_id from #concept_map_rx) 
+create index concept_map_rx_idx on #concept_map_rx(c_basecode)
+insert into drug_exposure with (tablock) (person_id  , drug_concept_id, drug_exposure_start_date , drug_exposure_start_datetime, drug_exposure_end_date , drug_exposure_end_datetime  , drug_type_concept_id 
+  , visit_occurrence_id , drug_source_value , drug_source_concept_id , dose_unit_source_value )
+select distinct m.patient_num, rx.mapped_id, m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
+ '43542358' -- Physician administered drug - these are all vaccines...
+, m.Encounter_num, rx.concept_code, rx.concept_id, units_cd
+ from i2b2fact m inner join #concept_map_rx rx on rx.c_basecode = m.concept_cd 
 
 end
 go
@@ -1353,6 +1418,7 @@ exec OMOPdiagnosis
 exec OMOPvital
 exec OMOPlabResultCM
 exec OMOPprocedure
+exec OMOPprocedure_secondary
 exec OMOPera
 exec OMOPobservation
 --exec OMOPreport
