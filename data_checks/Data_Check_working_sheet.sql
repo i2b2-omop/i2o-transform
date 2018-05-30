@@ -47,6 +47,10 @@ select count(*), measurement_concept_id from measurement group by measurement_co
 --insert into concept (concept_id, concept_name, domain_id, vocabulary_id, concept_class_id, standard_concept, concept_code, valid_start_date, valid_end_date, invalid_reason)
 --select concept_id, concept_name, domain_id, vocabulary_id, concept_class_id, standard_concept, concept_code, convert(date, valid_start_date), convert(date, valid_end_date), invalid_reason from concept_varchar4;
 
+--insert into concept_relationship (concept_id_1, concept_id_2, relationship_id, valid_start_date, valid_end_date, invalid_reason)
+--select concept_id_1, concept_id_2, relationship_id, convert(date, valid_start_date), convert(date, valid_end_date), invalid_reason from concept_relationship_varchar;
+
+
  select * from  condition_occurrence where condition_concept_id = 0;
  --ICD9:
   select * from  condition_occurrence where condition_concept_id = 0 and condition_source_value like 'ICD9:%';
@@ -61,11 +65,54 @@ select count(*), measurement_concept_id from measurement group by measurement_co
  join condition_occurrence co on c.concept_code = substring(co.condition_source_value, 6, 20) and co.condition_source_value like 'ICD9%';
  --712265
 
-  select c.concept_id from concept c 
+  select c.* from concept c 
  join condition_occurrence co on c.concept_code = substring(co.condition_source_value, 6, 20) and co.condition_source_value like 'ICD9%'
  where c.domain_id like 'Condition%';
  --498789
 
+
+ select * from pcornet_diag as diag where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
+  ( not ( diag.pcori_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
+  and not ( diag.pcori_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
+  and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.pcori_basecode like '[0-9]%') )) ;
+
+
+   select * from pcornet_diag as diag where (diag.c_fullname not like '\PCORI\DIAGNOSIS\10\%' or
+  ( not ( diag.pcori_basecode like '[V]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([V]%\([V]%\([V]%' )
+  and not ( diag.pcori_basecode like '[E]%' and diag.c_fullname not like '\PCORI\DIAGNOSIS\10\([E]%\([E]%\([E]%' ) 
+  and not (diag.c_fullname like '\PCORI\DIAGNOSIS\10\%' and diag.pcori_basecode like '[0-9]%') ))
+  and diag.OMOP_SOURCECODE =0 ;
+
+
+
+ select * from concept;
+
+  select count(*), vocabulary_id from concept group by vocabulary_id;
+
+  select * from concept c
+  join concept_relationship cr on cr.concept_id_1 = c.concept_id and cr.relationship_id like '%SNOMED%'
+   where c.vocabulary_id like 'ICD9%';
+  --23329  ---103958
+
+    select * from concept c 
+ join condition_occurrence co on c.concept_code = substring(co.condition_source_value, 6, 20) and co.condition_source_value like 'ICD9%'
+  join concept_relationship cr on cr.concept_id_1 = c.concept_id and cr.relationship_id = 'Maps to'
+  join concept jc on jc.concept_id = cr.concept_id_2 and jc.standard_concept = 'S'
+   where c.vocabulary_id like 'ICD9%' and c.domain_id like 'Condition%';
+
+   select distinct omop_sourcecode,c2.concept_id,c2.domain_id 
+from pcornet_diag d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+inner join concept c2 ON c2.concept_id =cr.concept_id_2
+and c2.standard_concept ='S'
+and c2.invalid_reason is null
+--and c1.concept_id in (select omop_sourcecode from temp_mds)
+and c2.domain_id='Condition'
+-- zero records
+
+select * from observation_fact fact
+join pcornet_diag pd on fact.concept_cd = pd.c_basecode and pd.c_path not like '\PCORI\DIAGNOSIS\10%';
+--540346
 
 
 
