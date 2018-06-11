@@ -231,6 +231,13 @@ Alter Table observation_period
 Add observation_period_id Int Identity(1, 1)
 Go
 
+ALTER TABLE [dbo].[observation_period] ALTER COLUMN [observation_period_start_datetime] datetime NULL
+GO
+
+ALTER TABLE [dbo].[observation_period] ALTER COLUMN [observation_period_end_datetime] datetime NULL
+GO
+
+
 IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_observation') 
 	Alter table observation DROP constraint xpk_observation
 Go
