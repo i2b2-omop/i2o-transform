@@ -70,6 +70,8 @@ delete from drug_exposure
 GO
 exec OMOPdrug_exposure
 GO
+exec OMOPprocedure_secondary -- Add procedures as specified by OMOP to all the non-procedure tables
+GO
 delete from drug_era
 GO
 delete from condition_era
