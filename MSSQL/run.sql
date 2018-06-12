@@ -38,6 +38,8 @@ GO
 
 --exec pcornetloader;
 --GO
+exec OMOPProvider --added for v4.0, needs to be run first. 
+GO
 exec OMOPclear
 GO
 delete from person

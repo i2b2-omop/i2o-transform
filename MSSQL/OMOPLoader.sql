@@ -1379,6 +1379,24 @@ go
 
 
 
+----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
+-- Provider Transform -- Written by Matthew Joss, and Jeff Klann Ph. D.
+--NEW 06-12-18!
+----------------------------------------------------------------------------------------------------------------------------------------
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPProvider') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPProvider
+go
+
+create procedure OMOPProvider as
+begin
+
+insert into provider(provider_id, provider_name, provider_source_value)
+select  distinct ROW_NUMBER() OVER (ORDER BY provider_id) New_ID, prov.name_char, prov.provider_id 
+from provider_dimension prov
+
+end
+go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
