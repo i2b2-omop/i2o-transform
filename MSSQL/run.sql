@@ -40,6 +40,8 @@ GO
 --GO
 exec OMOPclear
 GO
+delete from OMOPProvider
+GO
 exec OMOPProvider --added for v4.0, needs to be run first. 
 GO
 delete from person
