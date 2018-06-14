@@ -579,10 +579,11 @@ select distinct v.patient_num, v.encounter_num,
 	cast(start_Date as datetime), 
 	(case when end_date is not null then end_date else start_date end) end_Date, 
 	(case when end_date is not null then cast(end_Date as datetime) else cast(start_date as datetime) end),  
-	'0', 
+	provider.provider_id, --insert provider id instead of '0.'
 (case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, '0', '44818518',v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
+left outer join provider on visit_occurrence.provider_id = provider.provider_source_value 
 
 end
 go
@@ -1420,6 +1421,7 @@ TRUNCATE TABLE measurement
 TRUNCATE TABLE procedure_occurrence
 TRUNCATE TABLE visit_occurrence
 TRUNCATE TABLE person
+TRUNCATE TABLE provider
 
 end
 go
