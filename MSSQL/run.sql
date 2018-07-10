@@ -40,6 +40,10 @@ GO
 --GO
 exec OMOPclear
 GO
+delete from OMOPProvider
+GO
+exec OMOPProvider --added for v4.0, needs to be run first. 
+GO
 delete from person
 GO
 exec OMOPdemographics
@@ -69,6 +73,8 @@ GO
 delete from drug_exposure
 GO
 exec OMOPdrug_exposure
+GO
+exec OMOPprocedure_secondary -- Add procedures as specified by OMOP to all the non-procedure tables
 GO
 delete from drug_era
 GO
