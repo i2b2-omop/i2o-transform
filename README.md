@@ -9,7 +9,7 @@ Derived from code by Jeffrey Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torre
 _Presently this is an alpha version!_
 
 ### Current status:
-This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Requirements](https://sites.google.com/view/ehrupload/omop-tables). It currently transforms the following tables in OMOP v5.2 format:
+This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Requirements](https://sites.google.com/view/ehrupload/omop-tables). It currently runs on MSSQL _only_ and transforms the following tables in OMOP v5.2 format:
 
 #### Fully supported in [current release](https://github.com/i2b2-omop/i2o-transform/releases/tag/0.1)
 * person: populated from patient_dimension
