@@ -17,10 +17,10 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 * condition_occurrence: populated from diagnosis data
 * drug_exposure: poopulated from medication data
 * procedure_occurrence: populated from procedure data
-* measurement: populated with vital signs only
+* measurement: populated with vital signs and labs (only tested on PCORI lab subset)
 
 #### Supported in [repository code](https://github.com/i2b2-omop/i2o-transform/tree/0.1/MSSQL) (see more detail in the [CHANGELOG](https://github.com/i2b2-omop/i2o-transform/blob/master/CHANGELOG.md))
-* measurement: populated with diagnosis, procedure, and vital sign data
+* measurement: populated with diagnosis, procedure, vital signs, and labs (testing presently on full LOINC ontology)
 * observation: populated with diagnosis and procedure data
 * drug_exposure: populated with medication and procedure data
 * death: populated from patient_dimension directly (not tied to ontology)
