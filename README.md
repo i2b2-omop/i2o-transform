@@ -36,6 +36,7 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 
 #### Additionally under development:
 * Support for transforming unit codes into OMOP standard vocabulary
+* Putting correct provider codes in all the clinical data tables (currently 0, unknown)
 
 ### Installation guide:
 1. Create a database for your OMOP tables and perform the next three major numbered steps on that database.
