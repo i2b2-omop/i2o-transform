@@ -820,7 +820,7 @@ from i2b2fact fact
  inner join PCORNET_PROC pproc on pproc.c_basecode = fact.concept_cd
  inner join i2o_mapping omap on pproc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Procedure'*/
  inner join #concept_map_px prc on prc.c_basecode = fact.concept_cd and (prc.mapped_domain='Procedure' or prc.domain_id='Procedure')
- left outer join provider on i2b2fact.provider_id = provider.provider_source_value --provider support added MJ 6/16/18
+ left outer join provider on fact.provider_id = provider.provider_source_value --provider support added MJ 6/16/18
 -----------------------------------------------------------
 -- look for observation facts that are procedures
 -- Q: Which procedures are primary and which are secondary and which are unknown
@@ -872,7 +872,7 @@ select  distinct fact.patient_num, case prc.mapped_domain when 'Observation' the
   , provider.provider_id, prc.PCORI_BASECODE, prc.concept_id, fact.encounter_num from i2b2fact fact
  -- not tied to encounters-- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
 inner join #concept_map_obs prc on prc.c_basecode = fact.concept_cd
-left outer join provider on observation.provider_id = provider.provider_source_value 
+left outer join provider on fact.provider_id = provider.provider_source_value 
 
 -- Next, update measurement table ---
 -- Millions of records (7k codes) get thrown into here - measurements like PTT that we have no value for
@@ -1215,7 +1215,7 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
     and m.provider_id = supply.provider_id
     and m.instance_num = supply.instance_num
     
-    left outer join provider on i2b2fact.provider_id = provider.provider_source_value --provider support MJ 6/17/18
+    left outer join provider on m.provider_id = provider.provider_source_value --provider support MJ 6/17/18
 
      where mo.omop_sourcecode is not null
 
