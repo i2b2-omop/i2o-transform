@@ -1043,9 +1043,9 @@ isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'O
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
 isnull(m.Units_CD,'NI') RESULT_UNIT, -- TODO: Should be standardized units
-nullif(norm.NORM_RANGE_LOW,'') NORM_RANGE_LOW,
+NULL as NORM_RANGE_LOW, --norm ranges have a temporary fix.... still need a better solution 7/27/18 MJ with Snehil  Gupta's help from WU.
 --norm.NORM_MODIFIER_LOW,
-nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
+NULL as NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
