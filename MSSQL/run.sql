@@ -8,7 +8,7 @@
 -- All data from 1-1-2010 is transformed.
 -- Jeff Klann, PhD, and Matthew Joss
 --------------------------------------------------------------------------------------------------------------------------
-use i2b2stub
+use eMERGE_OMOP_Mart
 drop table i2b2patient_list
 GO
 
@@ -23,14 +23,14 @@ GO
 drop view i2b2patient;
 GO
 -- Change to match your database name
-create view i2b2patient as select * from i2b2demodata..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
+create view i2b2patient as select * from eMERGE_OMOP_Mart..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
 GO
 drop synonym i2b2visit;
 GO
 drop view i2b2visit;
 GO
 -- Change to match your database name
-create view i2b2visit as select * from i2b2demodata..visit_dimension where (end_date is null or end_date<getdate());
+create view i2b2visit as select * from eMERGE_OMOP_Mart..visit_dimension where (end_date is null or end_date<getdate());
 GO
 
 
@@ -40,7 +40,9 @@ GO
 --GO
 exec OMOPclear
 GO
-delete from OMOPProvider
+delete from observation
+GO
+delete from Provider
 GO
 exec OMOPProvider --added for v4.0, needs to be run first. 
 GO
@@ -85,10 +87,6 @@ GO
 delete from death
 GO
 exec OMOPdeath
-GO
-delete from observation
-GO
-exec OMOPobservation
 GO
 delete from i2pReport
 GO

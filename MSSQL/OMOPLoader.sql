@@ -116,7 +116,7 @@ GO
 IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2loyalty_patients')) DROP VIEW i2b2loyalty_patients
 GO
 DECLARE @SQL as varchar(4000)
-IF  OBJECT_ID(N'[PCORI_Mart].[dbo].[loyalty_cohort_patient_summary]','U') IS NOT NULL
+IF  OBJECT_ID(N'.[dbo].[loyalty_cohort_patient_summary]','U') IS NOT NULL ---Need to put in a DB name before .[dbo] for your datamart.
 SET @SQL='
 create view i2b2loyalty_patients as
 (select patient_num,cast(''2010/7/1'' as datetime) period_start,cast(''2014/7/1'' as datetime) period_end from PCORI_Mart..loyalty_cohort_patient_summary where filter_set & 61511 = 61511 and patient_num in (select patient_num from i2b2patient))'
@@ -481,7 +481,7 @@ union --B -- nS,R, H
 	'	and	lower(p.race_cd) in ('+lower(race.c_dimcode)+') '+
 	'	and	lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'   and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')'+
-    '   and patient_num not in (select person_id from person)' --bug fix MJ 3/19/18
+    '   and patient_num not in (select person_id from person)'  --bug fix MJ 3/19/18
 	from pcornet_demo race,pcornet_demo hisp
 	where race.c_fullname like '\PCORI\DEMOGRAPHIC\RACE\%'
 	and race.c_visualattributes like 'L%'
@@ -501,7 +501,7 @@ union --4 -- S, NR, H
 	'	where lower(isnull(p.sex_cd,''NI'')) in ('+lower(sex.c_dimcode)+') '+
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '+
-	'   and patient_num not in (select person_id from person)' --bug fix MJ 3/19/18
+	'   and patient_num not in (select person_id from person)'  --bug fix MJ 3/19/18
     from pcornet_demo sex
 	where sex.c_fullname like '\PCORI\DEMOGRAPHIC\SEX\%'
 	and sex.c_visualattributes like 'L%'
@@ -519,7 +519,7 @@ union --5 -- NS, NR, H
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) in (select lower(code) from omop_codelist where codetype=''HISPANIC'')' +
-    '   and patient_num not in (select person_id from person)' --bug fix MJ 3/19/18
+    '   and patient_num not in (select person_id from person)'  --bug fix MJ 3/19/18
 union --6 -- NS, NR, nH
 	select 'insert into person(gender_source_value,race_source_value,ethnicity_source_value,person_id,year_of_birth,month_of_birth,day_of_birth,birth_datetime,gender_concept_id,ethnicity_concept_id,race_concept_id) '+
 	'	select p.sex_cd,substring(p.race_cd+'':Unknown'', 1, 50),substring(p.race_cd+'':Unknown'', 1, 50),patient_num, '+
@@ -530,11 +530,11 @@ union --6 -- NS, NR, nH
 	'0,'+
 	'0,'+
 	'0'+
-	' from i2b2patient p '+
+    ' from i2b2patient p '+
 	'	where lower(isnull(p.sex_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''SEX'') '+
 	'	and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''HISPANIC'') '+
 	'   and lower(isnull(p.race_cd,''xx'')) not in (select lower(code) from omop_codelist where codetype=''RACE'') ' +
-    '   and patient_num not in (select person_id from person)' --bug fix MJ 3/19/18
+    '   and patient_num not in (select person_id from person)'  --bug fix MJ 3/19/18
 begin
 exec pcornet_popcodelist
 
@@ -583,7 +583,7 @@ select distinct v.patient_num, v.encounter_num,
 (case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, '0', '44818518',v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
-left outer join provider on visit_occurrence.provider_id = provider.provider_source_value 
+left outer join provider on v.providerid = provider.provider_source_value 
 
 end
 go
@@ -811,7 +811,7 @@ insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_da
 -- procedure_source_value ----------> PCORI base code from ontology -------------------------------> Done
 -- procuedure_source_concept_id ----> OMOP source code from ontology ------------------------------> Done
 -- qualifier_source_value ----------> The source code for the qualifier as it appears in the source data. What is this?????????????
-select  distinct fact.patient_num, isnull(prc.mapped_id, '0'), fact.start_date, 0, 0, null, 0, fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id, null, fact.start_date
+select  distinct fact.patient_num, isnull(prc.mapped_id, '0'), fact.start_date, 0, 0, null, provider.provider_id, fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id, null, fact.start_date
 from i2b2fact fact
 ---------------------------------------------------------
 -- For every procedure there must be a corresponding visit
@@ -820,7 +820,7 @@ from i2b2fact fact
  inner join PCORNET_PROC pproc on pproc.c_basecode = fact.concept_cd
  inner join i2o_mapping omap on pproc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Procedure'*/
  inner join #concept_map_px prc on prc.c_basecode = fact.concept_cd and (prc.mapped_domain='Procedure' or prc.domain_id='Procedure')
- 
+ left outer join provider on fact.provider_id = provider.provider_source_value --provider support added MJ 6/16/18
 -----------------------------------------------------------
 -- look for observation facts that are procedures
 -- Q: Which procedures are primary and which are secondary and which are unknown
@@ -839,7 +839,7 @@ go
 -- Insert procedures into observation, measurement, drug, dx tables
 -- Device not supported - not required by AllOfUs at the moment
 ----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPobservation') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPobservation
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure_secondary') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure_secondary
 go
 
 create procedure OMOPprocedure_secondary as
@@ -869,9 +869,10 @@ select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concep
 create index concept_map_obs_idx on #concept_map_obs(c_basecode)
 insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
 select  distinct fact.patient_num, case prc.mapped_domain when 'Observation' then prc.mapped_id else '0' END, fact.start_date, 38000280 -- observation recorded from EHR
-  , 0, prc.PCORI_BASECODE, prc.concept_id, fact.encounter_num from i2b2fact fact
+  , provider.provider_id, prc.PCORI_BASECODE, prc.concept_id, fact.encounter_num from i2b2fact fact
  -- not tied to encounters-- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
 inner join #concept_map_obs prc on prc.c_basecode = fact.concept_cd
+left outer join provider on fact.provider_id = provider.provider_source_value 
 
 -- Next, update measurement table ---
 -- Millions of records (7k codes) get thrown into here - measurements like PTT that we have no value for
@@ -955,17 +956,19 @@ INSERT INTO dbo.[measurement]
       ,[operator_concept_id])
 
 Select distinct m.patient_num, m.encounter_num, substring(vital.i_loinc, 1, 50), 
-Cast(m.start_date as DATE) meaure_date,   
+m.start_date meaure_date,   
 CAST(CONVERT(char(5), M.start_date, 108) as datetime) measure_time,
 '0', m.nval_num, substring(m.units_cd, 1, 50), substring(concat (tval_char, nval_num), 1, 50), 
 isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
-'44818701', '0', '0'
+'44818701', provider.provider_id, '0'
 from i2b2fact m
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
 inner join pcornet_vital vital on vital.c_basecode  = m.concept_cd
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
+left outer join provider on m.provider_id = provider.provider_source_value --provider support MJ 6/17/18
 where vital.c_fullname like '\PCORI\VITAL\%'
 and vital.i_loinc is not null 
+
 
 end
 go
@@ -1040,9 +1043,9 @@ isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'O
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
 isnull(m.Units_CD,'NI') RESULT_UNIT, -- TODO: Should be standardized units
-nullif(norm.NORM_RANGE_LOW,'') NORM_RANGE_LOW,
+NULL as NORM_RANGE_LOW, --norm ranges have a temporary fix.... still need a better solution 7/27/18 MJ with Snehil  Gupta's help from WU.
 --norm.NORM_MODIFIER_LOW,
-nullif(norm.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
+NULL as NORM_RANGE_HIGH,
 --norm.NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
@@ -1168,7 +1171,7 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
 , null
 , refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
 , null, null
-, 0, m.Encounter_num, mo.C_BASECODE, null, null, units_cd
+, provider.provider_id, m.Encounter_num, mo.C_BASECODE, null, null, units_cd
  from i2b2fact m
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
@@ -1212,7 +1215,9 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
     and m.provider_id = supply.provider_id
     and m.instance_num = supply.instance_num
     
-    where mo.omop_sourcecode is not null
+    left outer join provider on m.provider_id = provider.provider_source_value --provider support MJ 6/17/18
+
+     where mo.omop_sourcecode is not null
 
 end
 GO
@@ -1411,6 +1416,7 @@ create procedure OMOPclear
 as 
 begin
 
+TRUNCATE TABLE death
 TRUNCATE TABLE observation
 TRUNCATE TABLE drug_era
 TRUNCATE TABLE condition_era
@@ -1419,9 +1425,9 @@ TRUNCATE TABLE condition_occurrence
 TRUNCATE TABLE drug_exposure
 TRUNCATE TABLE measurement
 TRUNCATE TABLE procedure_occurrence
-TRUNCATE TABLE visit_occurrence
-TRUNCATE TABLE person
-TRUNCATE TABLE provider
+DELETE FROM visit_occurrence
+DELETE FROM person
+DELETE FROM provider
 
 end
 go

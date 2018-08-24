@@ -6,9 +6,39 @@ Written by Jeffrey Klann, PhD; Matthew Joss; Kevin Embree
 
 Derived from code by Jeffrey Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres
 
-Presently this is an alpha version!
+_Presently this is an alpha version!_
 
-### To set this up:
+### Current status:
+This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Requirements](https://sites.google.com/view/ehrupload/omop-tables). It currently runs on MSSQL _only_ and transforms the following tables in OMOP v5.2 format:
+
+#### Fully supported in [current release](https://github.com/i2b2-omop/i2o-transform/releases/tag/0.1)
+* person: populated from patient_dimension
+* visit_occurrence: populated from visit_dimension
+* condition_occurrence: populated from diagnosis data
+* drug_exposure: poopulated from medication data
+* procedure_occurrence: populated from procedure data
+* measurement: populated with vital signs and labs (only tested on PCORI lab subset)
+
+#### Supported in [repository code](https://github.com/i2b2-omop/i2o-transform/tree/0.1/MSSQL) (see more detail in the [CHANGELOG](https://github.com/i2b2-omop/i2o-transform/blob/master/CHANGELOG.md))
+* measurement: populated with diagnosis, procedure, vital signs, and labs (testing presently on full LOINC ontology)
+* observation: populated with diagnosis and procedure data
+* drug_exposure: populated with medication and procedure data
+* death: populated from patient_dimension directly (not tied to ontology)
+* provider: populated from provider dimension
+
+#### Still needed to support
+* location: will be populated with location_cd?
+* care_site: could be populated from location_cd?
+* device_exposure: will be populated from procedure data
+* _fact_relationship: cannot populate, no data_
+* _specimen: cannot populate, no data_
+* _notes: will be difficult to populate, will not be done by 8/18_
+
+#### Additionally under development:
+* Support for transforming unit codes into OMOP standard vocabulary
+* Putting correct provider codes in all the clinical data tables (currently 0, unknown)
+
+### Installation guide:
 1. Create a database for your OMOP tables and perform the next three major numbered steps on that database.
 2. Download the [OMOP DDL](https://github.com/OHDSI/CommonDataModel) to create the OMOP tables. This has been tested with OMOP 5.2.
 3. Download and import the [i2o-mapping table](https://github.com/i2b2-omop/i2o-transform/blob/master/MSSQL/i2o_mapping.csv), which contains a subset of the OMOP concept dictionary needed by the transform script.
