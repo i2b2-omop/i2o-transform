@@ -50,6 +50,10 @@ delete from person
 GO
 exec OMOPdemographics
 GO
+delete from care_site
+go
+exec OMOPcare_site
+go
 delete from visit_occurrence
 GO
 exec OMOPencounter
