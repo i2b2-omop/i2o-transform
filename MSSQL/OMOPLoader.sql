@@ -596,6 +596,14 @@ create procedure OMOPencounter as
 DECLARE @sqltext NVARCHAR(4000);
 begin
 
+-- calculate providerID for every visit_dimension record
+SELECT enc.encounter_num, MAX(ofa.provider_id) AS ProviderID
+INTO #temp_provids
+FROM i2b2visit enc
+     JOIN i2b2fact ofa ON enc.encounter_num = ofa.encounter_num
+GROUP BY enc.encounter_num
+GO
+
 insert into visit_occurrence with(tablock) (person_id,visit_occurrence_id,visit_start_date,visit_start_datetime, 
 		visit_end_date,visit_end_datetime,provider_id,  
 		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
@@ -607,9 +615,11 @@ select distinct v.patient_num, v.encounter_num,
 	provider.provider_id, --insert provider id instead of '0.'
 (case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518',v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
+inner join #temp_provids t on t.encounter_num=v.encounter_num
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
-left outer join provider on v.providerid = provider.provider_source_value 
+left outer join provider on t.providerid = provider.provider_source_value 
 left outer join care_site care on v.location_cd = care.place_of_service_source_value
+
 
 end
 go
