@@ -22,7 +22,7 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Change to your omop database
-use i2b2stub;
+use AllOfUs_Mart;
 go
 
 -- drop any existing synonyms
@@ -44,13 +44,13 @@ GO
 
 -- You will almost certainly need to edit your database name
 -- Synonyms for dimension tables
-create synonym i2b2visit for i2b2demodata..visit_dimension
+create synonym i2b2visit for AllOfUs_Mart..visit_dimension
 GO 
-create synonym i2b2patient for  i2b2demodata..patient_dimension
+create synonym i2b2patient for  AllOfUs_Mart..patient_dimension
 GO
-create synonym i2b2fact for  i2b2demodata..observation_fact    
+create synonym i2b2fact for  AllOfUs_Mart..observation_fact    
 GO
-create synonym i2b2concept for  i2b2demodata..concept_dimension  
+create synonym i2b2concept for  AllOfUs_Mart..concept_dimension  
 GO
 
 -- You will almost certainly need to edit your database name
@@ -280,6 +280,11 @@ Alter Table observation
 Add observation_id BigInt Identity(1, 1)
 Go
 
+IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_care_site') 
+	Alter table care_site DROP constraint xpk_care_site
+Go
+Alter Table care_site Drop Column care_site_id
+Go
 
 Alter Table care_site
 Add care_site_id Int Identity(1, 1)
@@ -602,7 +607,6 @@ INTO #temp_provids
 FROM i2b2visit enc
      JOIN i2b2fact ofa ON enc.encounter_num = ofa.encounter_num
 GROUP BY enc.encounter_num
-GO
 
 insert into visit_occurrence with(tablock) (person_id,visit_occurrence_id,visit_start_date,visit_start_datetime, 
 		visit_end_date,visit_end_datetime,provider_id,  
@@ -1502,7 +1506,7 @@ exec OMOPlabResultCM
 exec OMOPprocedure
 exec OMOPprocedure_secondary
 exec OMOPera
-exec OMOPobservation
+--exec OMOPobservation
 --exec OMOPreport
 
 end
