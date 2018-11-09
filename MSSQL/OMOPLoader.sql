@@ -280,6 +280,11 @@ Alter Table observation
 Add observation_id BigInt Identity(1, 1)
 Go
 
+
+Alter Table care_site
+Add care_site_id Int Identity(1, 1)
+Go
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prep-to-transform code
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -558,6 +563,26 @@ end
 go
 
 
+
+----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
+-- Care Site Transform -- Written by Matthew Joss, and Jeff Klann Ph. D.
+--NEW 08-23-18!
+----------------------------------------------------------------------------------------------------------------------------------------
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPCare_site') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPCare_site
+go
+
+create procedure OMOPCare_site as
+begin
+
+insert into care_site(place_of_service_source_value)
+select distinct location_cd
+from visit_dimension 
+
+end
+go
+
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Encounter - by Jeff Klann and Aaron Abend and Matthew Joss
@@ -571,6 +596,14 @@ create procedure OMOPencounter as
 DECLARE @sqltext NVARCHAR(4000);
 begin
 
+-- calculate providerID for every visit_dimension record
+SELECT enc.encounter_num, MAX(ofa.provider_id) AS ProviderID
+INTO #temp_provids
+FROM i2b2visit enc
+     JOIN i2b2fact ofa ON enc.encounter_num = ofa.encounter_num
+GROUP BY enc.encounter_num
+GO
+
 insert into visit_occurrence with(tablock) (person_id,visit_occurrence_id,visit_start_date,visit_start_datetime, 
 		visit_end_date,visit_end_datetime,provider_id,  
 		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
@@ -580,10 +613,13 @@ select distinct v.patient_num, v.encounter_num,
 	(case when end_date is not null then end_date else start_date end) end_Date, 
 	(case when end_date is not null then cast(end_Date as datetime) else cast(start_date as datetime) end),  
 	provider.provider_id, --insert provider id instead of '0.'
-(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, '0', '44818518',v.inout_cd  
+(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518',v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
+inner join #temp_provids t on t.encounter_num=v.encounter_num
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
-left outer join provider on v.providerid = provider.provider_source_value 
+left outer join provider on t.providerid = provider.provider_source_value 
+left outer join care_site care on v.location_cd = care.place_of_service_source_value
+
 
 end
 go
@@ -996,6 +1032,16 @@ inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_o
 inner join pcornet_lab lsource on m.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\RESULT_LOC\%'
 
+-- Optimization - build temp ont table - 8/13/18 jgk - new version that doesn't have duplicate entries
+select * into #pcornet_lab2 from 
+(select *, row_number() over (partition by c_basecode order by (case when parent_basecode like 'LAB_NAME:%' then 0 when parent_basecode like 'LOINC:%' then 1 else 2 end), pcori_specimen_source desc) k -- Griffin Weber's code to pick one row per basecode with preference for one with a lab_name in parent_basecode and with specimen source
+from (select lab.pcori_basecode,lab.c_basecode,lab.pcori_specimen_source,ont_parent.c_basecode parent_basecode, NORM_RANGE_LOW, NORM_MODIFIER_LOW, NORM_RANGE_HIGH,NORM_MODIFIER_HIGH
+from pcornet_lab lab -- the actual leaf entry (local basecode)
+inner join pcornet_lab ont_loinc on lab.pcori_basecode=ont_loinc.pcori_basecode and ont_loinc.c_basecode like 'LOINC:%' -- the entry with a LOINC code (could be the same or the parent row, depending on the mapping)
+left outer join (select c_fullname, c_basecode, norm.* from pcornet_lab ont_parent inner join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME where c_fullname like '\PCORI\LAB_RESULT_CM\LAB_NAME\%' and c_basecode like 'LAB_NAME:%') ont_parent on ont_loinc.c_path=ont_parent.c_fullname -- labnormal table plus c_fullname corresponding to it
+where lab.c_fullname like '\PCORI\LAB_RESULT_CM\%') x) x where k=1
+
+
 INSERT INTO dbo.[measurement]
      ([person_id]--[PATID]
       ,[visit_occurrence_id]--[ENCOUNTERID]
@@ -1043,10 +1089,10 @@ isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'O
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
 isnull(m.Units_CD,'NI') RESULT_UNIT, -- TODO: Should be standardized units
-NULL as NORM_RANGE_LOW, --norm ranges have a temporary fix.... still need a better solution 7/27/18 MJ with Snehil  Gupta's help from WU.
---norm.NORM_MODIFIER_LOW,
-NULL as NORM_RANGE_HIGH,
---norm.NORM_MODIFIER_HIGH,
+nullif(lab.NORM_RANGE_LOW,'') NORM_RANGE_LOW,
+--isnull(lab.NORM_MODIFIER_LOW, 'UN') NORM_MODIFIER_LOW,
+nullif(lab.NORM_RANGE_HIGH,'') NORM_RANGE_HIGH,
+--isnull(lab.NORM_MODIFIER_HIGH, 'UN') NORM_MODIFIER_HIGH,
 --CASE isnull(nullif(m.VALUEFLAG_CD,''),'NI') WHEN 'H' THEN 'AH' WHEN 'L' THEN 'AL' WHEN 'A' THEN 'AB' ELSE 'NI' END ABN_IND,
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END RAW_RESULT,
 isnull(u.concept_id, '0'), isnull(omap.concept_id, '0'), isnull(ont_loinc.omop_sourcecode, '0'), '44818702', '0', '0'
@@ -1054,7 +1100,8 @@ isnull(u.concept_id, '0'), isnull(omap.concept_id, '0'), isnull(ont_loinc.omop_s
 
 FROM i2b2fact M  
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
-inner join pcornet_lab lab on lab.c_basecode  = M.concept_cd and lab.c_fullname like '\PCORI\LAB_RESULT_CM\%'
+--inner join pcornet_lab lab on lab.c_basecode  = M.concept_cd and lab.c_fullname like '\PCORI\LAB_RESULT_CM\%'
+inner join #pcornet_lab2 lab on lab.c_basecode  = M.concept_cd
 inner join pcornet_lab ont_loinc on lab.pcori_basecode=ont_loinc.pcori_basecode and ont_loinc.c_basecode like 'LOINC:%' --NOTE: You will need to change 'LOINC:' to our local term.
 inner JOIN pcornet_lab ont_parent on ont_loinc.c_path=ont_parent.c_fullname
 inner join i2o_mapping omap on ont_loinc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Measurement'
@@ -1428,6 +1475,7 @@ TRUNCATE TABLE procedure_occurrence
 DELETE FROM visit_occurrence
 DELETE FROM person
 DELETE FROM provider
+DELETE FROM care_site
 
 end
 go
@@ -1445,6 +1493,7 @@ begin
 exec OMOPclear
 exec OMOPdemographics
 exec OMOPdrug_exposure
+exec OMOPcare_site
 exec OMOPencounter
 exec OMOPobservationperiod
 exec OMOPdiagnosis
