@@ -1,6 +1,6 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
--- OMOPLoader Script for OMOP v0.11
+-- OMOPLoader Script for OMOP
 -- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres; Kevin Embree; Griffin Weber, MD, PhD
 -- Transforms i2b2 data mapped to the PCORnet ontology into OMOP format.
 -- MSSQL version
@@ -698,13 +698,13 @@ create index concept_map_dx_idx on #concept_map_dx(c_basecode)
 select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, dxsource.pcori_basecode dxsource, dxsource.c_fullname
  into #sourcefact
 from i2b2fact factline
-inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
+--inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
 inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
 where dxsource.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\%'
 
 select  patient_num, encounter_num, factline.provider_id, concept_cd, start_date, dxsource.pcori_basecode pdxsource,dxsource.c_fullname 
 into #pdxfact from i2b2fact factline 
-inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num 
+--inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num 
 inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode  
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
@@ -1022,13 +1022,13 @@ begin
 -- Optimized to use temp tables; also, removed "distinct" - much faster and seems unnecessary - 12/9/15
 select patient_num, encounter_num, m.provider_id, concept_cd, start_date, lsource.pcori_basecode  PRIORITY 
 into #priority from i2b2fact M
-inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
+--inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
 inner join pcornet_lab lsource on m.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\PRIORITY\%'
  
 select  patient_num, encounter_num, m.provider_id, concept_cd, start_date, lsource.pcori_basecode  RESULT_LOC
 into #location from i2b2fact M
-inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
+--inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
 inner join pcornet_lab lsource on m.modifier_cd =lsource.c_basecode
 where c_fullname LIKE '\PCORI_MOD\RESULT_LOC\%'
 
@@ -1147,7 +1147,7 @@ begin
     select pcori_basecode,c_fullname,instance_num,start_date,basis.provider_id,concept_cd,encounter_num,modifier_cd
 		into #basis
 		from i2b2fact basis
-			inner join visit_occurrence enc on enc.person_id = basis.patient_num and enc.visit_occurrence_id = basis.encounter_Num
+			--inner join visit_occurrence enc on enc.person_id = basis.patient_num and enc.visit_occurrence_id = basis.encounter_Num
 		 join pcornet_med basiscode 
 			on basis.modifier_cd = basiscode.c_basecode
 			and basiscode.c_fullname like '\PCORI_MOD\RX_BASIS\%'
@@ -1155,7 +1155,7 @@ begin
     select pcori_basecode,instance_num,start_date,freq.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #freq
 		from i2b2fact freq
-			inner join visit_occurrence enc on enc.person_id = freq.patient_num and enc.visit_occurrence_id = freq.encounter_Num
+			--inner join visit_occurrence enc on enc.person_id = freq.patient_num and enc.visit_occurrence_id = freq.encounter_Num
 		 join pcornet_med freqcode 
 			on freq.modifier_cd = freqcode.c_basecode
 			and freqcode.c_fullname like '\PCORI_MOD\RX_FREQUENCY\%'
@@ -1163,7 +1163,7 @@ begin
     select nval_num,instance_num,start_date,quantity.provider_id,concept_cd,encounter_num,modifier_cd
 		into #quantity
 		from i2b2fact quantity
-			inner join visit_occurrence enc on enc.person_id = quantity.patient_num and enc.visit_occurrence_id = quantity.encounter_Num
+			--inner join visit_occurrence enc on enc.person_id = quantity.patient_num and enc.visit_occurrence_id = quantity.encounter_Num
 		 join pcornet_med quantitycode 
 			on quantity.modifier_cd = quantitycode.c_basecode
 			and quantitycode.c_fullname like '\PCORI_MOD\RX_QUANTITY\'
@@ -1171,7 +1171,7 @@ begin
 	select nval_num,instance_num,start_date,refills.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #refills
 		from i2b2fact refills
-			inner join visit_occurrence enc on enc.person_id = refills.patient_num and enc.visit_occurrence_id = refills.encounter_Num
+			--inner join visit_occurrence enc on enc.person_id = refills.patient_num and enc.visit_occurrence_id = refills.encounter_Num
 		 join pcornet_med refillscode 
 			on refills.modifier_cd = refillscode.c_basecode
 			and refillscode.c_fullname like '\PCORI_MOD\RX_REFILLS\'
@@ -1179,7 +1179,7 @@ begin
     select nval_num,instance_num,start_date,supply.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #supply
 		from i2b2fact supply
-			inner join visit_occurrence enc on enc.person_id = supply.patient_num and enc.visit_occurrence_id = supply.encounter_Num
+			--inner join visit_occurrence enc on enc.person_id = supply.patient_num and enc.visit_occurrence_id = supply.encounter_Num
 		 join pcornet_med supplycode 
 			on supply.modifier_cd = supplycode.c_basecode
 			and supplycode.c_fullname like '\PCORI_MOD\RX_DAYS_SUPPLY\'
