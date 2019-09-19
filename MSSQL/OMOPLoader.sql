@@ -905,8 +905,8 @@ inner join concept_map_dx_dx diag on diag.c_basecode = factline.concept_cd and (
 -- Note: old I9inI10 exclusion logic now above in concept_map code
 
 -- Next, update observation table ---
-insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
-select  distinct fact.patient_num, case diag.mapped_domain when 'Observation' then diag.mapped_id else '0' END, fact.start_date, 38000280 -- observation recorded from EHR
+insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_datetime, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
+select  distinct fact.patient_num, case diag.mapped_domain when 'Observation' then diag.mapped_id else '0' END, fact.start_date, fact.start_date, 38000280 -- observation recorded from EHR
   , 0, diag.PCORI_BASECODE, diag.concept_id, fact.encounter_num from i2b2fact fact 
 inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- encounters limit amount of output
 inner join concept_map_dx_obs diag on diag.c_basecode = fact.concept_cd
@@ -1003,8 +1003,8 @@ begin
 
 -- Update observation table ---
 -- When mapped domain is not present, use unmapped code if it is CPT4, ICD-10, or HCPCS - these that do not have mappings are standard codes
-insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
-select  distinct fact.patient_num, case prc.mapped_domain when 'Observation' then prc.mapped_id else '0' END, fact.start_date, 38000280 -- observation recorded from EHR
+insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_datetime, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
+select  distinct fact.patient_num, case prc.mapped_domain when 'Observation' then prc.mapped_id else '0' END, fact.start_date, fact.start_date, 38000280 -- observation recorded from EHR
   , provider.provider_id, prc.PCORI_BASECODE, prc.concept_id, fact.encounter_num from i2b2fact fact
  -- not tied to encounters-- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
 inner join concept_map_px_obs prc on prc.c_basecode = fact.concept_cd
