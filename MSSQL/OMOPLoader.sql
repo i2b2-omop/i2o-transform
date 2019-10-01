@@ -301,7 +301,7 @@ Alter Table observation
 Add observation_id BigInt Identity(1, 1)
 Go
 
--- todo: I should recreate these constraints or ask users to rerun the omop constraint script
+// todo: I should recreate these constraints or ask users to rerun the omop constraint script
 alter table person drop constraint fpk_person_care_site
 GO
 alter table provider drop constraint fpk_provider_care_site
@@ -1558,11 +1558,11 @@ TRUNCATE TABLE condition_occurrence
 TRUNCATE TABLE drug_exposure
 TRUNCATE TABLE measurement
 TRUNCATE TABLE procedure_occurrence
-DELETE FROM visit_occurrence -- Truncate cannot work with FPK constraints
-DELETE FROM person -- Truncate cannot work with FPK constraints
-DELETE FROM provider -- Truncate cannot work with FPK constraints
-DELETE FROM location -- Truncate cannot work with FPK constraints
-DELETE FROM care_site -- Truncate cannot work with FPK constraints
+DELETE FROM visit_occurrence // Truncate cannot work with FPK constraints
+DELETE FROM person // Truncate cannot work with FPK constraints
+DELETE FROM provider // Truncate cannot work with FPK constraints
+DELETE FROM location // Truncate cannot work with FPK constraints
+DELETE FROM care_site // Truncate cannot work with FPK constraints
 
 end
 go
