@@ -1595,7 +1595,7 @@ exec(@sql);
 insert into visit_provids
 SELECT enc.encounter_num, MAX(ofa.provider_id) AS ProviderID
 FROM i2b2visit enc
-     JOIN (select patient_num, encounter_num, provider_id from i2b2fact where provider_id!='@') ofa ON enc.encounter_num = ofa.encounter_num
+     JOIN (select patient_num, encounter_num, provider_id from i2b2fact) ofa ON enc.encounter_num = ofa.encounter_num
      JOIN i2b2patient_list d on enc.patient_num=d.patient_num -- this line is only to speed up the selection for smaller patient sets
 GROUP BY enc.encounter_num
 
