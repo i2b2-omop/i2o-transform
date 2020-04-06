@@ -10,6 +10,9 @@
 --------------------------------------------------------------------------------------------------------------------------
 use <insert your db name here>
 
+-- You probably do not need to run this. It creates subsets of the concept table for more efficient transform, and it only needs to be run when the concept table changes.
+-- It is run by the OMOPLoader script initially, so run this line once if the concept table was not installed when OMOPLoader was initially run.
+-- exec OMOPBuildMapping
 
 -- Make 100000000 number smaller for testing
 exec OMOPPrep 100000000

@@ -5,7 +5,7 @@
 -- Transforms i2b2 data mapped to the PCORnet ontology into OMOP format.
 -- MSSQL version
 --
--- FYI, now the diagnosis and procesdure transforms write to four multiple target tables
+-- FYI, now the diagnosis and procedure transforms write to four multiple target tables
 --
 -- INSTRUCTIONS:
 -- 1. Edit the "create synonym" statements, parameters, and the USE statement at the top of this script to point at your objects. 
@@ -13,9 +13,10 @@
 -- 2. In the Second part of this preamble, there are two functions that need to be edited depending on the base units used at your site: unit_ht() and unit_wt(). 
 --      Use the corresponding RETURN statement depending on which units your site uses: 
 --      Inches (RETURN 1) versus Centimeters(RETURN 0.393701) and Pounds (RETURN 1) versus Kilograms(RETURN 2.20462). 
--- 3. USE your empty OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
+-- 3. USE your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
+-- 4. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
 -- 4. Run this script to set up the loader
--- 5. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader" (will transform all patients)
+-- 5. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- create synonyms to make the code portable - please edit these
@@ -705,6 +706,7 @@ EXEC('IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''conce
 EXEC('IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''concept_map_px_meas'') AND type in (N''U'')) DROP TABLE concept_map_px_meas')
 EXEC('IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''concept_map_px_dx'') AND type in (N''U'')) DROP TABLE concept_map_px_dx')
 EXEC('IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''concept_map_px_rx'') AND type in (N''U'')) DROP TABLE concept_map_px_rx')
+EXEC('IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N''i2o_mapping'') AND type in (N''U'')) DROP TABLE i2o_mapping')
 
 -- Create on-the-fly vocab mappings
 truncate table #concept_map
@@ -774,6 +776,32 @@ select c_basecode, pcori_basecode, concept_code, vocabulary_id, domain_id,concep
 create index concept_map_pxrx_idx on concept_map_px_rx(c_basecode)
 
 EXEC('DROP TABLE #concept_map')
+
+-- New 04-20, no now builds i2o-mapping on the fly, which was needed for labs and drug exposure
+
+-- Add labs from pcornet_lab
+select distinct omop_sourcecode, c2.concept_id,c2.domain_id
+into i2o_mapping
+from pcornet_lab d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+inner join concept c2 ON c2.concept_id =cr.concept_id_2
+and c2.standard_concept ='S'
+and c2.invalid_reason is null
+and c2.domain_id='Measurement';
+
+-- Add to mapping table for Drug
+insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
+select distinct omop_sourcecode, c2.concept_id,c2.domain_id
+from pcornet_med d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+inner join concept c2 ON c2.concept_id =cr.concept_id_2
+and c2.standard_concept ='S'
+and c2.invalid_reason is null
+and c2.domain_id='Drug';
+
+-- Index it
+CREATE NONCLUSTERED INDEX [i2omap_index]
+	ON [dbo].[i2o_mapping]([omop_sourcecode]);
 
 end
 go
