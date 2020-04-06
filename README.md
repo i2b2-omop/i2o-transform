@@ -43,8 +43,7 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 1. Create a database for your OMOP tables and perform the next three major numbered steps on that database.
 2. Download the [OMOP DDL](https://github.com/OHDSI/CommonDataModel/releases) to create the OMOP tables. This has been tested with OMOP 5.2.
 3. Install the [OMOP vocabulary](http://athena.ohdsi.org/vocabulary/list). Be sure to download all needed vocabularies, which is usually ICD-10 plus the default set. (Note that OMOPBuildMapping, run automatically in step 5.5, is dependent on the vocabulary being loaded. If you perform these steps out of order, you might need to manually run OMOPBuildMapping on your database.)
-4. Download and import the [i2o-mapping table](https://github.com/i2b2-omop/i2o-transform/blob/master/MSSQL/i2o_mapping.csv), which contains a subset of the OMOP concept dictionary needed by the transform script.
-5. Download and run the [MSSQL version](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) of the transform. (Oracle version not currently available.)
+4. Download and run the [MSSQL version](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) of the transform. (Oracle version not currently available.)
     1. Create a database for your OMOP tables and run the OMOP DDL there. Our transform requires that they be on the same server as your i2b2 instance - though you can move them later.
     2. Make sure the database user that will be running the scripts can also read from your i2b2 data and ontology databases. 
     3. From your new OMOP database, open the OMOPLoader.sql script.  Edit the preamble to match your local setup, according to the instructions in the file. This now includes the following:
@@ -54,7 +53,7 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
     4. This script will delete your existing OMOP tables. If you do not want this behavior, please back them up.
     5. Run the script.
 
-4. From your i2b2 database: Download, install, and map your i2b2 data to v3.1 or later of the [ARCH Ontology](https://github.com/ARCH-commons/arch-ontology/blob/master/Documentation/INSTALL.md)
+5. From your i2b2 database: Download, install, and map your i2b2 data to v3.1 or later of the [ARCH Ontology](https://github.com/ARCH-commons/arch-ontology/blob/master/Documentation/INSTALL.md)
 
 ### Each time you want to transform your data:
 1. From your OMOP database, execute the run script in the [MSSQL directory of our GitHub](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) to transform your data.
