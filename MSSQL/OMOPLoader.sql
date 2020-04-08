@@ -74,6 +74,9 @@ GO
 -- you will only need to edit and uncomment if your tables have
 -- names other than these
 
+create view i2o_ontology_lab as (select * from COVID_Mart..i2b2metadata where i_stddomain='LOINC')
+GO
+
 --create synonym pcornet_med for i2b2stub..pcornet_med
 --GO
 --create synonym pcornet_lab for i2b2stub..pcornet_lab
@@ -780,9 +783,9 @@ EXEC('DROP TABLE #concept_map')
 -- New 04-20, no now builds i2o-mapping on the fly, which was needed for labs and drug exposure
 
 -- Add labs from pcornet_lab
-select distinct omop_sourcecode, c2.concept_id,c2.domain_id
+select distinct c1.concept_code source_code, c1.concept_id source_id, c2.concept_id,c2.domain_id
 into i2o_mapping
-from pcornet_lab d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+from i2o_ontology_lab d inner join concept c1 on (c1.concept_code=d.i_stdcode and d.i_stddomain='LOINC' and c1.domain_id='Measurement')
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
 inner join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
@@ -790,8 +793,8 @@ and c2.invalid_reason is null
 and c2.domain_id='Measurement';
 
 -- Add to mapping table for Drug
-insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
-select distinct omop_sourcecode, c2.concept_id,c2.domain_id
+insert into i2o_mapping(source_code, source_id,concept_id,domain_id) 
+select distinct '' source_code, omop_sourcecode, c2.concept_id,c2.domain_id
 from pcornet_med d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
 inner join concept c2 ON c2.concept_id =cr.concept_id_2
@@ -801,7 +804,7 @@ and c2.domain_id='Drug';
 
 -- Index it
 CREATE NONCLUSTERED INDEX [i2omap_index]
-	ON [dbo].[i2o_mapping]([omop_sourcecode]);
+	ON [dbo].[i2o_mapping]([source_code]);
 
 end
 go
@@ -1600,6 +1603,7 @@ go
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 11. Prep the patient list (formerly in run script)
 -- Also, populate the visit_provids table. It's very slow so we don't want to do this every time we run the transform.
+-- Note that this must be run every time i2b2 data is refreshed!
 -- TODO, consider moving this
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprep') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprep
@@ -1623,12 +1627,14 @@ exec(@sql);
 insert into visit_provids
 SELECT enc.encounter_num, MAX(ofa.provider_id) AS ProviderID
 FROM i2b2visit enc
-     JOIN (select patient_num, encounter_num, provider_id from i2b2fact where provider_id!='@') ofa ON enc.encounter_num = ofa.encounter_num
+     LEFT OUTER JOIN (select patient_num, encounter_num, provider_id from i2b2fact where provider_id!='@') ofa ON enc.encounter_num = ofa.encounter_num
+      --^ bugfix 4/8/20 lots of encounters were not being included because they didn't have a provider
      JOIN i2b2patient_list d on enc.patient_num=d.patient_num -- this line is only to speed up the selection for smaller patient sets
 GROUP BY enc.encounter_num
 
 end
 GO
+ 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 12. Load Program
 -- If you pass a value >0 , OMOP prep is called to build the patient list
