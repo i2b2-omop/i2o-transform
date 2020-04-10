@@ -43,6 +43,8 @@ IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enc') DROP SYNONYM
 IF OBJECTPROPERTY (object_id('dbo.getDataMartID'), 'IsScalarFunction') = 1 DROP function getDataMartID
 IF OBJECTPROPERTY (object_id('dbo.getDataMartName'), 'IsScalarFunction') = 1 DROP function getDataMartName
 IF OBJECTPROPERTY (object_id('dbo.getDataMartPlatform'), 'IsScalarFunction') = 1 DROP function getDataMartPlatform
+IF  EXISTS (SELECT * FROM sys.views WHERE name = N'i2o_ontology_lab') DROP VIEW i2o_ontology_lab
+IF  EXISTS (SELECT * FROM sys.views WHERE name = N'i2o_ontology_drug') DROP VIEW i2o_ontology_drug
 GO
 
 -- This table needs to be created before the synonyms
@@ -74,9 +76,13 @@ GO
 -- you will only need to edit and uncomment if your tables have
 -- names other than these
 
-create view i2o_ontology_lab as (select * from COVID_Mart..i2b2metadata where i_stddomain='LOINC')
+-- These are the new ontology-indepdent i2o-2020 views
+create view i2o_ontology_lab as (select * from i2b2stub..pcornet_lab where i_stddomain='LOINC')
+GO
+create view i2o_ontology_drug as (select * from i2b2stub..pcornet_med where i_stddomain='RxNorm' or i_stddomain='NDC')
 GO
 
+-- You might also need these older pcornet synonyms if you're using modifiers from your PCORnet ontology
 --create synonym pcornet_med for i2b2stub..pcornet_med
 --GO
 --create synonym pcornet_lab for i2b2stub..pcornet_lab
@@ -91,6 +97,34 @@ GO
 --GO
 --create synonym pcornet_enc for i2b2stub..pcornet_enc
 --GO
+
+-- Modifier config: you will need to configure this to point to the ontology table and pathy for your modifiers
+-- Presently this is config for the PCORI ontology because these modifiers are standardized
+-- Change the table name to i2o_ontology_* to switch to the standard ontologies
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'i2o_config_modifier') AND type in (N'U')) DROP TABLE i2o_config_modifier
+GO
+
+CREATE TABLE [i2o_config_modifier]  ( 
+	[c_domain]       	varchar(25) NULL,
+	[c_tablename]    	varchar(50) NULL,
+	[c_path]         	varchar(400) NULL,
+	[c_target_column]	varchar(50) NULL 
+	)
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('lab', 'pcornet_lab', '\PCORI_MOD\PRIORITY\', 'priority')
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('lab', 'pcornet_lab', '\PCORI_MOD\RESULT_LOC\', 'result_loc')
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_DAYS_SUPPLY\', 'days_supply')
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_REFILLS\', 'refills')
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_QUANTITY\', 'quantity')
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_FREQUENCY\', 'frequency')
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_BASIS\', 'basis')
+GO
 
 -- Create the demographics codelist (no need to modify)
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[omop_codelist]') AND type in (N'U'))
@@ -782,8 +816,8 @@ EXEC('DROP TABLE #concept_map')
 
 -- New 04-20, no now builds i2o-mapping on the fly, which was needed for labs and drug exposure
 
--- Add labs from pcornet_lab
-select distinct c1.concept_code source_code, c1.concept_id source_id, c2.concept_id,c2.domain_id
+-- Add labs from the ontology
+select distinct c1.concept_code source_code, c1.concept_id source_id, convert(int, c2.concept_id) concept_id,convert(varchar(20),c2.domain_id) domain_id -- convert is to allow nulls
 into i2o_mapping
 from i2o_ontology_lab d inner join concept c1 on (c1.concept_code=d.i_stdcode and d.i_stddomain='LOINC' and c1.domain_id='Measurement')
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
@@ -792,12 +826,13 @@ and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Measurement';
 
--- Add to mapping table for Drug
-insert into i2o_mapping(source_code, source_id,concept_id,domain_id) 
-select distinct '' source_code, omop_sourcecode, c2.concept_id,c2.domain_id
-from pcornet_med d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
-inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
+-- Add drugs from the ontology
+-- Note: left joins to support non-standard codes (no mapping) in i2o-2020.
+insert into i2o_mapping(source_code, source_id,concept_id,domain_id)
+select distinct c1.concept_code source_code, c1.concept_id source_id, c2.concept_id,isnull(c2.domain_id,c1.domain_id)
+from i2o_ontology_drug d inner join concept c1 on (c1.concept_code=d.i_stdcode and (d.i_stddomain='RxNorm' or d.i_stddomain='NDC') and c1.domain_id='Drug')
+left join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+left join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Drug';
@@ -1125,8 +1160,9 @@ go
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- LAB_RESULT_CM - Written by Jeff Klann, PhD and Arturo Torres, and Matthew Joss
+-- DEPRECATED! (04/9/20)
 ----------------------------------------------------------------------------------------------------------------------------------------
-
+/*
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPlabResultCM') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPlabResultCM;
 GO
 create procedure OMOPlabResultCM as
@@ -1244,10 +1280,11 @@ and m.MODIFIER_CD='@'
 
 END
 GO  
-
+*/
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prescribing - by Aaron Abend and Jeff Klann PhD and Matthew Joss with optimizations by Griffin Weber, MD, PhD
+-- Note that now a lot of deprecated codes have been removed entirely from the concept dictionary (pre-2007) and they get a 0 now
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
 
@@ -1323,7 +1360,7 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
-select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
+select distinct m.patient_num, isnull(isnull(omap.concept_id,omap.source_id),0) , m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
  case 
    when basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%' then '38000177'
    when basis.c_fullname like '\PCORI_MOD\RX_BASIS\DI\%' then '38000175'
@@ -1336,7 +1373,7 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
 -- Note the only reason we need i2o_mapping is to figure which are standard codes, sourcecode already comes from RxCui
- left join i2o_mapping omap on mo.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Drug'
+ left join i2o_mapping omap on mo.i_stdcode=omap.source_code and omap.domain_id='Drug'
 
 -- TODO: This join adds several minutes to the load - must be debugged
 
@@ -1377,7 +1414,7 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
     
     left outer join provider on m.provider_id = provider.provider_source_value --provider support MJ 6/17/18
 
-     where mo.omop_sourcecode is not null
+     where mo.i_stdcode is not null
 
 end
 GO
@@ -1566,6 +1603,130 @@ end
 go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
+-- i2o v2020 - revising to no longer require any particular ontology - to support rapidly updating codesets with more agility
+-- Of course, OMOP and PCORI ontologies can be adapted to support this new method, for query interoperability. Scripts will be added to the repository.
+-- By Jeff Klann, PhD 04/2020
+----------------------------------------------------------------------------------------------------------------------------------------
+-- This procedure extracts modifiers into temp tables based on the configuration in i2o_config_modifier
+-- Now creates real tables called temp_mod_* - the calling procedure should drop them when done. (Global temp tables are across all dbs, and local temp tables only follow the inner scope, so were not feasible.)
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[build_modifiers]') AND type in (N'P', N'PC'))
+DROP PROCEDURE [dbo].[build_modifiers]
+GO
+
+create procedure build_modifiers (@domain varchar(20)) as
+
+declare @sqltext nvarchar (2000)
+declare @tablename varchar(50)
+declare @path varchar(400)
+declare @target_column varchar(50)
+
+declare getconfigsql cursor local for
+select c_tablename, c_path, c_target_column from i2o_config_modifier where c_domain=@domain
+
+begin
+    open getconfigsql;
+    fetch next from getconfigsql into @tablename,@path,@target_column;
+    while @@fetch_status=0
+    begin
+        set @sqltext = 'select patient_num, encounter_num, m.provider_id, concept_cd, start_date, o.i_stdcode  ' +@target_column+' ' +
+            'into temp_mod_'+@target_column+' from i2b2fact M ' +
+            --inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
+            ' inner join '+@tablename+' o on m.modifier_cd =o.c_basecode ' +
+            ' where c_fullname LIKE '''+@path+ '%'''
+        exec sp_executesql @sqltext
+        raiserror('Modifiers: %s',0,1,@sqltext) with NOWAIT;
+        fetch next from getconfigsql into @tablename,@path,@target_column;
+    end
+    close getconfigsql;
+    deallocate getconfigsql;
+end
+GO
+
+--exec build_modifiers lab
+--select patient_num, encounter_num, m.provider_id, concept_cd, start_date, o.i_stdcode  priority into #priority from i2b2fact M  inner join pcornet_lab o on m.modifier_cd =o.c_basecode  where c_fullname LIKE '\PCORI_MOD\PRIORITY\%'
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPmeasurementLab') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPmeasurementLab;
+GO
+create procedure OMOPmeasurementLab as
+begin
+
+-- Build Modifiers
+exec build_modifiers lab
+
+INSERT INTO dbo.[measurement]
+     ([person_id]
+      ,[visit_occurrence_id]
+      ,[measurement_source_value]
+      ,[measurement_date]
+      ,[measurement_datetime]
+      ,[value_as_concept_id]
+      ,[value_as_number]
+      ,[unit_source_value]
+      ,[range_low]
+      ,[range_high]
+      ,[value_source_value]
+      ,[unit_concept_id]
+      ,[measurement_concept_id]
+      ,[measurement_source_concept_id]
+      ,[measurement_type_concept_id]
+      ,[provider_id]
+      ,[operator_concept_id])
+
+SELECT DISTINCT  M.patient_num person_id,
+M.encounter_num visit_occurrence_id,
+isnull(lab.i_stdcode, '') measurement_source_value,
+Cast(m.start_date as DATE) measurement_date,   
+cast(m.start_Date as datetime) measurement_datetime,
+-- NOTE: Are these concept_ids the ones analysts want?
+CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
+CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
+isnull(m.Units_CD,'') unit_source_value, 
+
+-- TODO: Need to get normal ranges working again
+--nullif(lab.NORM_RANGE_LOW,'') range_low,
+--nullif(lab.NORM_RANGE_HIGH,'') range_high,
+null range_low, null range_high,
+
+CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END value_source_value,
+isnull(u.concept_id, '0') unit_concept_id, 
+isnull(omap.concept_id, '0') measurement_concept_id, 
+isnull(omap.source_id, '0') measurement_source_concept_id, 
+'44818702', provider.provider_id, '0'
+
+FROM i2b2fact M  
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
+inner join (select * from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
+inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
+--left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+left outer join i2o_unitsmap u on u.units_name=m.units_cd
+left outer join provider on m.provider_id = provider.provider_source_value --provider support
+
+
+LEFT OUTER JOIN
+temp_mod_priority p
+ON  M.patient_num=p.patient_num
+and M.encounter_num=p.encounter_num
+and M.provider_id=p.provider_id
+and M.concept_cd=p.concept_Cd
+and M.start_date=p.start_Date
+ 
+LEFT OUTER JOIN
+temp_mod_result_loc l
+ON  M.patient_num=l.patient_num
+and M.encounter_num=l.encounter_num
+and M.provider_id=l.provider_id
+and M.concept_cd=l.concept_Cd
+and M.start_date=l.start_Date
+ 
+WHERE  m.MODIFIER_CD='@'
+
+;drop table temp_mod_priority; 
+drop table temp_mod_result_loc;
+
+END
+GO  
+
+----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- clear Program - includes all tables
@@ -1678,9 +1839,9 @@ RAISERROR('OMOPdrug_exposure %s', 0, 1,@FLAG) WITH NOWAIT;
 exec OMOPvital
 set @FLAG=cast(getdate() as varchar(30))
 RAISERROR('OMOPvital %s', 0, 1,@FLAG) WITH NOWAIT;
-exec OMOPlabResultCM
+exec OMOPmeasurementLab
 set @FLAG=cast(getdate() as varchar(30))
-RAISERROR('OMOPlabResultCM %s', 0, 1,@FLAG) WITH NOWAIT;
+RAISERROR('OMOPmeasurementLab %s', 0, 1,@FLAG) WITH NOWAIT;
 exec OMOPprocedure
 set @FLAG=cast(getdate() as varchar(30))
 RAISERROR('OMOPprocedure %s', 0, 1,@FLAG) WITH NOWAIT;
