@@ -110,19 +110,19 @@ CREATE TABLE [i2o_config_modifier]  (
 	[c_path]         	varchar(400) NULL,
 	[c_target_column]	varchar(50) NULL 
 	)
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('lab', 'pcornet_lab', '\PCORI_MOD\PRIORITY\', 'priority')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('lab', 'pcornet_lab', '\PCORI_MOD\RESULT_LOC\', 'result_loc')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_DAYS_SUPPLY\', 'days_supply')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_REFILLS\', 'refills')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_QUANTITY\', 'quantity')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_FREQUENCY\', 'frequency')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_BASIS\', 'basis')
 GO
 
@@ -1613,7 +1613,7 @@ IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[build
 DROP PROCEDURE [dbo].[build_modifiers]
 GO
 
-create procedure [dbo].[build_modifiers] (@domain varchar(20), @force_update int= 0) as
+create procedure [build_modifiers] (@domain varchar(20), @force_update int= 0) as
 --------------------------------------------------------------------------------
 --Description: For each entry in i2o_config_modifier table 
 --               Generates a temp table for joining modifier fields to a query
@@ -1689,7 +1689,7 @@ GO
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPmeasurementLab') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPmeasurementLab;
 GO
-create procedure [dbo].[OMOPmeasurementLab] as
+create procedure [OMOPmeasurementLab] as
 --------------------------------------------------------------------
 -- DESCRIPTION: Inserts observation_facts that have loinc codes into measurment table
 -- Parameters: None
