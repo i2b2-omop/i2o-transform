@@ -23,7 +23,7 @@
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 -- Change to your omop database
-use AllOfUs_Mart;
+use i2b2stub;
 go
 
 -- drop any existing synonyms
@@ -59,15 +59,15 @@ GO
 -- You will almost certainly need to edit your database name
 -- Synonyms for dimension tables
 -- NOTE If this synonym doesn't work, run pcornet_prep and try again
-create synonym i2b2visit for AllOfUs_Mart..visit_dimension
+create synonym i2b2visit for i2b2demodata..visit_dimension
 GO 
-create view i2b2patient as select * from AllOfUs_Mart..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
+create view i2b2patient as select * from i2b2demodata..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
 GO
-create synonym i2b2fact for  AllOfUs_Mart..observation_fact    
+create synonym i2b2fact for  i2b2demodata..observation_fact    
 GO
-create synonym i2b2concept for  AllOfUs_Mart..concept_dimension  
+create synonym i2b2concept for  i2b2demodata..concept_dimension  
 GO
-create synonym provider_dimension for AllOfUs_Mart..provider_dimension
+create synonym provider_dimension for i2b2demodata..provider_dimension
 GO
 
 -- You will almost certainly need to edit your database name
@@ -77,25 +77,25 @@ GO
 -- names other than these
 
 -- These are the new ontology-indepdent i2o-2020 views
-create view i2o_ontology_lab as (select * from AllOfUs_Mart..pcornet_lab where i_stddomain='LOINC')
+create view i2o_ontology_lab as (select * from i2b2stub..pcornet_lab where i_stddomain='LOINC')
 GO
-create view i2o_ontology_drug as (select * from AllOfUs_Mart..pcornet_med where i_stddomain='RxNorm' or i_stddomain='NDC')
+create view i2o_ontology_drug as (select * from i2b2stub..pcornet_med where i_stddomain='RxNorm' or i_stddomain='NDC')
 GO
 
 -- You might also need these older pcornet synonyms if you're using modifiers from your PCORnet ontology
---create synonym pcornet_med for AllOfUs_Mart..pcornet_med
+--create synonym pcornet_med for i2b2stub..pcornet_med
 --GO
---create synonym pcornet_lab for AllOfUs_Mart..pcornet_lab
+--create synonym pcornet_lab for i2b2stub..pcornet_lab
 --GO
---create synonym pcornet_diag for AllOfUs_Mart..pcornet_diag
+--create synonym pcornet_diag for i2b2stub..pcornet_diag
 --GO 
---create synonym pcornet_demo for AllOfUs_Mart..pcornet_demo 
+--create synonym pcornet_demo for i2b2stub..pcornet_demo 
 --GO
---create synonym pcornet_proc for AllOfUs_Mart..pcornet_proc_nocpt
+--create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
 --GO
---create synonym pcornet_vital for AllOfUs_Mart..pcornet_vital
+--create synonym pcornet_vital for i2b2stub..pcornet_vital
 --GO
---create synonym pcornet_enc for AllOfUs_Mart..pcornet_enc
+--create synonym pcornet_enc for i2b2stub..pcornet_enc
 --GO
 
 -- Modifier config: you will need to configure this to point to the ontology table and path for your modifiers
@@ -110,19 +110,19 @@ CREATE TABLE [i2o_config_modifier]  (
 	[c_path]         	varchar(400) NULL,
 	[c_target_column]	varchar(50) NULL 
 	)
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('lab', 'pcornet_lab', '\PCORI_MOD\PRIORITY\', 'priority')
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('lab', 'pcornet_lab', '\PCORI_MOD\RESULT_LOC\', 'result_loc')
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_DAYS_SUPPLY\', 'days_supply')
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_REFILLS\', 'refills')
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_QUANTITY\', 'quantity')
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_FREQUENCY\', 'frequency')
-INSERT INTO [AllOfUs_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_BASIS\', 'basis')
 GO
 
@@ -171,7 +171,7 @@ DECLARE @SQL as varchar(4000)
 IF  OBJECT_ID(N'.[dbo].[loyalty_cohort_patient_summary]','U') IS NOT NULL ---Need to put in a DB name before .[dbo] for your datamart.
 SET @SQL='
 create view i2b2loyalty_patients as
-(select patient_num,cast(''2010/7/1'' as datetime) period_start,cast(''2014/7/1'' as datetime) period_end from AllOfUs_Mart..loyalty_cohort_patient_summary where filter_set & 61511 = 61511 and patient_num in (select patient_num from i2b2patient))'
+(select patient_num,cast(''2010/7/1'' as datetime) period_start,cast(''2014/7/1'' as datetime) period_end from PCORI_Mart..loyalty_cohort_patient_summary where filter_set & 61511 = 61511 and patient_num in (select patient_num from i2b2patient))'
 ELSE
 SET @SQL='
 create view i2b2loyalty_patients as
@@ -1682,6 +1682,7 @@ begin
     close getconfigsql;
     deallocate getconfigsql;
 end
+GO
 
 --exec build_modifiers lab
 --select patient_num, encounter_num, m.provider_id, concept_cd, start_date, o.i_stdcode  priority into #priority from i2b2fact M  inner join pcornet_lab o on m.modifier_cd =o.c_basecode  where c_fullname LIKE '\PCORI_MOD\PRIORITY\%'
@@ -1775,6 +1776,7 @@ PRINT 'OMOPMEASUREMENT_LAB EXECUTION TIME: ' +  CAST(datediff(s, @start_time, @e
 
 
 END
+GO  
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
