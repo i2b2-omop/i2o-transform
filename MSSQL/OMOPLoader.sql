@@ -98,7 +98,7 @@ GO
 --create synonym pcornet_enc for i2b2stub..pcornet_enc
 --GO
 
--- Modifier config: you will need to configure this to point to the ontology table and pathy for your modifiers
+-- Modifier config: you will need to configure this to point to the ontology table and path for your modifiers
 -- Presently this is config for the PCORI ontology because these modifiers are standardized
 -- Change the table name to i2o_ontology_* to switch to the standard ontologies
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'i2o_config_modifier') AND type in (N'U')) DROP TABLE i2o_config_modifier
@@ -110,19 +110,19 @@ CREATE TABLE [i2o_config_modifier]  (
 	[c_path]         	varchar(400) NULL,
 	[c_target_column]	varchar(50) NULL 
 	)
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('lab', 'pcornet_lab', '\PCORI_MOD\PRIORITY\', 'priority')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('lab', 'pcornet_lab', '\PCORI_MOD\RESULT_LOC\', 'result_loc')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_DAYS_SUPPLY\', 'days_supply')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_REFILLS\', 'refills')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_QUANTITY\', 'quantity')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_FREQUENCY\', 'frequency')
-INSERT INTO [COVID_OMOP_Mart].[dbo].[i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
+INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
 VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_BASIS\', 'basis')
 GO
 
@@ -1613,30 +1613,72 @@ IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[build
 DROP PROCEDURE [dbo].[build_modifiers]
 GO
 
-create procedure build_modifiers (@domain varchar(20)) as
-
+create procedure [build_modifiers] (@domain varchar(20), @force_update int= 0) as
+--------------------------------------------------------------------------------
+--Description: For each entry in i2o_config_modifier table 
+--               Generates a temp table for joining modifier fields to a query
+--               Each temp table is indexed on person_id, encounter_num, provider_id, concept_cd, start_date, instance_num
+-- Input parameters: @domain -- domain the temp table modifier is used for (must match value in i2o_config_modifier.c_domain
+--                   @force_update -- Forces rebuilding of temp tables
+-- Notes: Temp tables persist only during a connection
+--        This procedure defaults to NOT overwriting a pre-existing temp table
+--        If you need the temp tables rebuilt during a single connection set parameter @force_update = 1
+---------------------------------------------------------------------------------
+--Variables
 declare @sqltext nvarchar (2000)
 declare @tablename varchar(50)
 declare @path varchar(400)
 declare @target_column varchar(50)
+declare @temp_tablename varchar(100)
+declare @temp_tableidx varchar(100)
 
+--Cursors
 declare getconfigsql cursor local for
 select c_tablename, c_path, c_target_column from i2o_config_modifier where c_domain=@domain
 
 begin
+	--Loop Cursor
     open getconfigsql;
     fetch next from getconfigsql into @tablename,@path,@target_column;
     while @@fetch_status=0
     begin
-        set @sqltext = 'select patient_num, encounter_num, m.provider_id, concept_cd, start_date, o.i_stdcode  ' +@target_column+' ' +
-            'into temp_mod_'+@target_column+' from i2b2fact M ' +
-            --inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
-            ' inner join '+@tablename+' o on m.modifier_cd =o.c_basecode ' +
-            ' where c_fullname LIKE '''+@path+ '%'''
-        exec sp_executesql @sqltext
-        raiserror('Modifiers: %s',0,1,@sqltext) with NOWAIT;
+
+		--Set table temp name and idx name
+		set @temp_tablename = 'temp_mod_' + @target_column;
+		set @temp_tableidx = @temp_tablename + '_cidx';
+
+		-- If force_update then drop existing temp table if it exists
+		IF @force_update = 1 
+			BEGIN
+					IF OBJECT_ID(@temp_tablename) IS NOT NULL
+						BEGIN TRY
+							set @sqltext = 'DROP TABLE ' + @temp_tablename;
+							exec sp_executesql @sqltext;
+						END TRY
+						BEGIN CATCH
+							RAISERROR('ERROR: Failed to execute %s', 0, 1, @sqltext) with NOWAIT;
+						END CATCH;
+			END;
+
+		-- If the temp table does not already exist create it and index it
+		IF OBJECT_ID(@temp_tablename) IS NULL
+			BEGIN TRY
+				set @sqltext = 'select patient_num, encounter_num, m.provider_id, concept_cd, start_date, instance_num, o.i_stdcode  ' +@target_column+' ' +
+					'into temp_mod_'+@target_column+' from i2b2fact M ' +
+					' inner join '+@tablename+' o on m.modifier_cd =o.c_basecode ' +
+					' where c_fullname LIKE '''+@path+ '%'''
+				exec sp_executesql @sqltext
+				set @sqltext = 'create clustered index ' + @temp_tableidx + ' on ' + @temp_tablename + '(patient_num, encounter_num, provider_id, concept_cd, start_date, instance_num)'
+				exec sp_executesql @sqltext
+				PRINT 'CREATED TEMPORARY TABLE ' + @TEMP_TABLENAME;
+			END TRY
+			BEGIN CATCH
+				raiserror('Error: Failed to execute: %s',0, 1, @sqltext) with NOWAIT;
+			END CATCH;
+
         fetch next from getconfigsql into @tablename,@path,@target_column;
     end
+	--Close Loop
     close getconfigsql;
     deallocate getconfigsql;
 end
@@ -1647,9 +1689,18 @@ GO
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPmeasurementLab') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPmeasurementLab;
 GO
-create procedure OMOPmeasurementLab as
+create procedure [OMOPmeasurementLab] as
+--------------------------------------------------------------------
+-- DESCRIPTION: Inserts observation_facts that have loinc codes into measurment table
+-- Parameters: None
+-- Notes: None
+--------------------------------------------------------------------
+DECLARE @START_TIME DATETIME;
+DECLARE @END_TIME DATETIME;
+
 begin
 
+SET @START_TIME = GETDATE();
 -- Build Modifiers
 exec build_modifiers lab
 
@@ -1718,10 +1769,11 @@ and M.provider_id=l.provider_id
 and M.concept_cd=l.concept_Cd
 and M.start_date=l.start_Date
  
-WHERE  m.MODIFIER_CD='@'
+WHERE  m.MODIFIER_CD='@';
 
-;drop table temp_mod_priority; 
-drop table temp_mod_result_loc;
+SET @END_TIME = GETDATE();
+PRINT 'OMOPMEASUREMENT_LAB EXECUTION TIME: ' +  CAST(datediff(s, @start_time, @end_time) as nvarchar(50));
+
 
 END
 GO  
