@@ -8,15 +8,11 @@
 -- FYI, now the diagnosis and procedure transforms write to four multiple target tables
 --
 -- INSTRUCTIONS:
--- 1. Edit the "create synonym" statements, parameters, and the USE statement at the top of this script to point at your objects. 
---    This script will be run from an OMOP database you must have created.
--- 2. In the Second part of this preamble, there are two functions that need to be edited depending on the base units used at your site: unit_ht() and unit_wt(). 
---      Use the corresponding RETURN statement depending on which units your site uses: 
---      Inches (RETURN 1) versus Centimeters(RETURN 0.393701) and Pounds (RETURN 1) versus Kilograms(RETURN 2.20462). 
--- 3. USE your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
--- 4. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
--- 4. Run this script to set up the loader
--- 5. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
+-- 1. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
+-- 2. Run OMOPConfig_Setup.sql first if you have not already.
+--          a) Review the default values set by OMOPConfig_setup.sql and update or modify them as needed for your environment.
+-- 3. Run this script to set up the loader
+-- 4. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- create synonyms to make the code portable - please edit these
