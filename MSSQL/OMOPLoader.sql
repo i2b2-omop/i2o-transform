@@ -1769,7 +1769,7 @@ and M.encounter_num=l.encounter_num
 and M.provider_id=l.provider_id
 and M.concept_cd=l.concept_Cd
 and M.start_date=l.start_Date
-and M.instance_num = p.instance_num
+and M.instance_num = l.instance_num
  
 WHERE  m.MODIFIER_CD='@';
 
