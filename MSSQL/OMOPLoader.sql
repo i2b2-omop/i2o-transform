@@ -1760,6 +1760,7 @@ and M.encounter_num=p.encounter_num
 and M.provider_id=p.provider_id
 and M.concept_cd=p.concept_Cd
 and M.start_date=p.start_Date
+and M.instance_num = p.instance_num
  
 LEFT OUTER JOIN
 temp_mod_result_loc l
@@ -1768,6 +1769,7 @@ and M.encounter_num=l.encounter_num
 and M.provider_id=l.provider_id
 and M.concept_cd=l.concept_Cd
 and M.start_date=l.start_Date
+and M.instance_num = l.instance_num
  
 WHERE  m.MODIFIER_CD='@';
 
