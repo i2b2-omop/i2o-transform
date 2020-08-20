@@ -12,7 +12,9 @@
 --                     3) Create a local i2b2patient_list table that must exist before the OMOPLoader script can be run.
 --                          NOTE: OMOPLoader script uses this table in creation of a view.
 -- MSSQL version
--- Instructions: Run this script in the database/schema of your OMOP tables
+-- Instructions: 1) Run this script in the database/schema of your OMOP tables
+--               2) Review the table i2o_transform_config and update the default values to values appropriate for your environment
+--				 3) Review the table i2o_config_modifier and update the default values to values appropriate for your environment
 --
 -- Contributors: Jeff Klann, PhD; Matthew Joss; Aaron Abend; Arturo Torres; Kevin Embree; Griffin Weber, MD, PhD
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -55,8 +57,8 @@ IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'i2o_trans
 	VALUES('ontology.vital.db.schema.table', 'i2b2demodata.dbo.pcornet_vital')
 
 	--Set default database and schema of the OMOP DataMart tables
-	INSERT INTO [i2o_transform_config]([key], [value])
-	VALUES('omop.db.schema.', 'omopmart.dbo.')
+	--INSERT INTO [i2o_transform_config]([key], [value])
+	--VALUES('omop.db.schema.', 'omopmart.dbo.')
 
 	--Set height and weight variables to Imperial or Metric
 	INSERT INTO [i2o_transform_config]([key], [value])
@@ -78,7 +80,7 @@ GO
 -- Default configuration entered is for the PCORI ontology because these modifiers are standardized
 	--------------------------------------------------------------------------------------------
 	-- NOTE: All the values below are default values when the table is first created
-	-- NOTE: Local instutions should not make changes here, but
+	-- NOTE: Local institutions should not make changes here, but
 	-- NOTE: Directly update the values in your local i2o_config_modifier table once it's been made
 	-- NOTE: This table will NOT be over-written if executed a subsequent time.
 	-- NOTE: Specify the full path to the table database.schema.table

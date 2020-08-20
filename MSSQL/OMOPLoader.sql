@@ -12,10 +12,9 @@
 -- 2. Run OMOPConfig_Setup.sql first if you have not already.
 --          a) Review the default values set by OMOPConfig_setup.sql and update or modify them as needed for your environment.
 -- 3. Run this script to set up the loader
+--          a) Use your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
 -- 4. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
-
 ----------------------------------------------------------------------------------------------------------------------------------------
--- create synonyms to make the code portable - please edit these
 ----------------------------------------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------------------------------------------------------
