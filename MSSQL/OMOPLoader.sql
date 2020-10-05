@@ -8,122 +8,184 @@
 -- FYI, now the diagnosis and procedure transforms write to four multiple target tables
 --
 -- INSTRUCTIONS:
--- 1. Edit the "create synonym" statements, parameters, and the USE statement at the top of this script to point at your objects. 
---    This script will be run from an OMOP database you must have created.
--- 2. In the Second part of this preamble, there are two functions that need to be edited depending on the base units used at your site: unit_ht() and unit_wt(). 
---      Use the corresponding RETURN statement depending on which units your site uses: 
---      Inches (RETURN 1) versus Centimeters(RETURN 0.393701) and Pounds (RETURN 1) versus Kilograms(RETURN 2.20462). 
--- 3. USE your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
--- 4. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
--- 4. Run this script to set up the loader
--- 5. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
-
+-- 1. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
+-- 2. Run OMOPConfig_Setup.sql first if you have not already.
+--          a) Review the default values set by OMOPConfig_setup.sql and update or modify them as needed for your environment.
+-- 3. Run this script to set up the loader
+--          a) Use your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
+-- 4. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
 ----------------------------------------------------------------------------------------------------------------------------------------
--- create synonyms to make the code portable - please edit these
 ----------------------------------------------------------------------------------------------------------------------------------------
 
--- Change to your omop database
-use i2b2stub;
-go
-
--- drop any existing synonyms
+----------------------------------------------------------------------------------------------------------
+--Drop synonyms/views for i2b2 datamart
+----------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2patient')) DROP VIEW i2b2patient
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2concept') DROP SYNONYM i2b2concept
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2fact') DROP SYNONYM i2b2fact
-IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2patient') DROP SYNONYM  i2b2patient
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2visit') DROP SYNONYM  i2b2visit
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2provider') DROP SYNONYM i2b2provider
+
+
+--Remove deprecated synonyms/views 
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'provider_dimension') DROP SYNONYM  provider_dimension
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2patient') DROP SYNONYM  i2b2patient
+
+-------------------------------------------------------------------------------------------------------
+-- Create synonyms/views for i2b2 datamart  based on values in i2o_transform_config table
+-------------------------------------------------------------------------------------------------------
+DECLARE @SQL nvarchar(4000)
+DECLARE @SCHEMA nvarchar(100)
+
+BEGIN TRY
+	SET @SCHEMA = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'i2b2mart.db.schema.')
+END TRY
+BEGIN CATCH
+	RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+END CATCH
+IF NOT EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2patient'))
+	BEGIN TRY
+		SET @SQL = 'create view i2b2patient as select * from ' + @SCHEMA + N'patient_dimension where patient_num in (select patient_num from i2b2patient_list)'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2concept')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2concept for ' + @SCHEMA + 'concept_dimension'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2fact')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2fact for ' + @SCHEMA + 'observation_fact'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2visit')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2visit for ' + @SCHEMA + 'visit_dimension'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2provider')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2provider for ' + @SCHEMA + 'provider_dimension'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+GO
+
+----------------------------------------------------------------------------------------------------------
+--Drop synonyms/views for i2b2 datamart
+----------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_diag') DROP SYNONYM pcornet_diag
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_demo') DROP SYNONYM pcornet_demo
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_proc') DROP SYNONYM pcornet_proc
-IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_lab') DROP SYNONYM pcornet_lab
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_med') DROP SYNONYM pcornet_med
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_vital') DROP SYNONYM pcornet_vital
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enc') DROP SYNONYM pcornet_enc
-IF OBJECTPROPERTY (object_id('dbo.getDataMartID'), 'IsScalarFunction') = 1 DROP function getDataMartID
-IF OBJECTPROPERTY (object_id('dbo.getDataMartName'), 'IsScalarFunction') = 1 DROP function getDataMartName
-IF OBJECTPROPERTY (object_id('dbo.getDataMartPlatform'), 'IsScalarFunction') = 1 DROP function getDataMartPlatform
-IF  EXISTS (SELECT * FROM sys.views WHERE name = N'i2o_ontology_lab') DROP VIEW i2o_ontology_lab
-IF  EXISTS (SELECT * FROM sys.views WHERE name = N'i2o_ontology_drug') DROP VIEW i2o_ontology_drug
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enroll') DROP SYNONYM pcornet_enroll
+IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontology_lab')) DROP VIEW i2o_ontology_lab
+--IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontology_drug')) DROP VIEW i2o_ontology_drug
+
+--Remove deprecated synonyms/views
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_lab') DROP SYNONYM pcornet_lab
 GO
 
--- This table needs to be created before the synonyms
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[i2b2patient_list]') AND type in (N'U'))
-DROP TABLE [dbo].[i2b2patient_list]
-GO
-CREATE TABLE [dbo].[i2b2patient_list]  ( 
-	[patient_num]	int NOT NULL 
-	)
-GO
+-------------------------------------------------------------------------------------------------------
+-- Create synonyms/views for ontologies based on values in i2o_transform_config table
+-------------------------------------------------------------------------------------------------------
+DECLARE @SQL nvarchar(4000)
+DECLARE @TABLE_NAME nvarchar(100)
 
--- You will almost certainly need to edit your database name
--- Synonyms for dimension tables
--- NOTE If this synonym doesn't work, run pcornet_prep and try again
-create synonym i2b2visit for i2b2demodata..visit_dimension
-GO 
-create view i2b2patient as select * from i2b2demodata..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
-GO
-create synonym i2b2fact for  i2b2demodata..observation_fact    
-GO
-create synonym i2b2concept for  i2b2demodata..concept_dimension  
-GO
-create synonym provider_dimension for i2b2demodata..provider_dimension
-GO
-
--- You will almost certainly need to edit your database name
--- Synonyms for ontology dimensions and loyalty cohort summary
--- The synonyms in comments have identical names to the tables - 
--- you will only need to edit and uncomment if your tables have
--- names other than these
-
--- These are the new ontology-indepdent i2o-2020 views
-create view i2o_ontology_lab as (select * from i2b2stub..pcornet_lab where i_stddomain='LOINC')
-GO
-create view i2o_ontology_drug as (select * from i2b2stub..pcornet_med where i_stddomain='RxNorm' or i_stddomain='NDC')
-GO
-
--- You might also need these older pcornet synonyms if you're using modifiers from your PCORnet ontology
---create synonym pcornet_med for i2b2stub..pcornet_med
---GO
---create synonym pcornet_lab for i2b2stub..pcornet_lab
---GO
---create synonym pcornet_diag for i2b2stub..pcornet_diag
---GO 
---create synonym pcornet_demo for i2b2stub..pcornet_demo 
---GO
---create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
---GO
---create synonym pcornet_vital for i2b2stub..pcornet_vital
---GO
---create synonym pcornet_enc for i2b2stub..pcornet_enc
---GO
-
--- Modifier config: you will need to configure this to point to the ontology table and path for your modifiers
--- Presently this is config for the PCORI ontology because these modifiers are standardized
--- Change the table name to i2o_ontology_* to switch to the standard ontologies
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'i2o_config_modifier') AND type in (N'U')) DROP TABLE i2o_config_modifier
-GO
-
-CREATE TABLE [i2o_config_modifier]  ( 
-	[c_domain]       	varchar(25) NULL,
-	[c_tablename]    	varchar(50) NULL,
-	[c_path]         	varchar(400) NULL,
-	[c_target_column]	varchar(50) NULL 
-	)
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('lab', 'pcornet_lab', '\PCORI_MOD\PRIORITY\', 'priority')
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('lab', 'pcornet_lab', '\PCORI_MOD\RESULT_LOC\', 'result_loc')
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_DAYS_SUPPLY\', 'days_supply')
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_REFILLS\', 'refills')
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_QUANTITY\', 'quantity')
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_FREQUENCY\', 'frequency')
-INSERT INTO [i2o_config_modifier]([c_domain], [c_tablename], [c_path], [c_target_column])
-VALUES('rx', 'pcornet_med', '\PCORI_MOD\RX_BASIS\', 'basis')
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_demo')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.demo.db.schema.table')
+		SET @SQL = 'create synonym pcornet_demo for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_diag')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.diag.db.schema.table')
+		SET @SQL = 'create synonym pcornet_diag for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_proc')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.proc.db.schema.table')
+		SET @SQL = 'create synonym pcornet_proc for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_med')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.med.db.schema.table')
+		---------------------------------------------------------------------------------------
+		-- To be removed once all references to pcornet_med have been removed and replaced with i2o_ontology_drug
+		---------------------------------------------------------------------------------------
+		   SET @SQL = 'create synonym pcornet_med for ' + @TABLE_NAME 
+		   EXEC SP_EXECUTESQL @SQL
+		---------------------------------------------------------------------------------------
+		SET @SQL = 'create view i2o_ontology_drug as (select * from ' + @TABLE_NAME + ')'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_vital')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.vital.db.schema.table')
+		SET @SQL = 'create synonym pcornet_vital for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enc')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.enc.db.schema.table')
+		SET @SQL = 'create synonym pcornet_enc for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enroll')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.enroll.db.schema.table')
+		SET @SQL = 'create synonym pcornet_enroll for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontology_lab'))
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.lab.db.schema.table')
+		SET @SQL = 'create view i2o_ontology_lab as (select * from  ' + @TABLE_NAME + ')'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
 GO
 
 -- Create the demographics codelist (no need to modify)
@@ -147,16 +209,46 @@ IF OBJECTPROPERTY (object_id('dbo.unit_ht'), 'IsScalarFunction') = 1 DROP functi
 IF OBJECTPROPERTY (object_id('dbo.unit_wt'), 'IsScalarFunction') = 1 DROP function unit_wt
 go
 
-CREATE FUNCTION unit_ht() RETURNS float(10) AS BEGIN 
-    RETURN 1 -- Use this statement if your site stores HT data in units of Inches 
---    RETURN 0.393701 -- Use this statement if your site stores HT data in units of Centimeters 
-END
-GO
-
-CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN 
-    RETURN 1 -- Use this statement if your site stores WT data in units of Pounds 
---    RETURN 2.20462 -- Use this statement if your site stores WT data in units of Kilograms  
-END
+DECLARE @SQL nvarchar(4000)
+DECLARE @UNIT_TYPE nvarchar(50)
+SET @UNIT_TYPE = (SELECT tc.VALUE FROM i2o_transform_config tc WHERE tc.[key] = N'height.units');
+IF @UNIT_TYPE = 'IMPERIAL'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_ht() RETURNS float(10) AS BEGIN RETURN 1 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores HT data in units of Inches 
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF @UNIT_TYPE = 'METRIC'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_ht() RETURNS float(10) AS BEGIN RETURN 0.393701 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores HT data in units of Centimeters
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+SET @UNIT_TYPE = (SELECT tc.VALUE FROM i2o_transform_config tc WHERE tc.[key] = 'weight.units');
+IF @UNIT_TYPE = 'IMPERIAL'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN RETURN 1 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores WT data in units of Pounds
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF @UNIT_TYPE = 'METRIC'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN RETURN 2.20462 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores WT data in units of Kilograms
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH 
 GO
 
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -1597,7 +1689,7 @@ begin
 
 insert into provider(provider_id, provider_name, provider_source_value)
 select  distinct ROW_NUMBER() OVER (ORDER BY provider_id) New_ID, prov.name_char, prov.provider_id 
-from (select provider_id, min(NAME_CHAR) name_char from provider_dimension group by provider_id) prov
+from (select provider_id, min(NAME_CHAR) name_char from i2b2provider group by provider_id) prov
 
 end
 go
