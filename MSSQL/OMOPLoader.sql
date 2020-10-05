@@ -1041,7 +1041,7 @@ inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence with (tablock) (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
-select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, 
+select distinct factline.patient_num, factline.encounter_num encounterid, convert(date,factline.start_date), enc.provider_id, 
 case diag.mapped_domain when 'Condition' then diag.mapped_id else '0' END, -- insufficient, sometimes target domains are non-null and non-condition: isnull(diag.mapped_id, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
