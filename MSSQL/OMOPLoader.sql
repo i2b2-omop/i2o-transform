@@ -973,12 +973,12 @@ insert into visit_occurrence with(tablock) (person_id,visit_occurrence_id,visit_
 		visit_end_date,visit_end_datetime,provider_id,  
 		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
 select distinct v.patient_num, v.encounter_num,  
-	start_Date, 
-	cast(start_Date as datetime), 
-	(case when end_date is not null then end_date else start_date end) end_Date, 
-	(case when end_date is not null then cast(end_Date as datetime) else cast(start_date as datetime) end),  
+	convert(date, start_Date) as visit_start_date, 
+	start_Date as visit_start_datetime, 
+	ISNULL(convert(date, end_date), ISNULL((select convert(date, max(f.start_date)) from i2b2fact f where f.encounter_num = v.encounter_num group by f.encounter_num), convert(date, start_date))) end_Date, 
+	ISNULL(end_date, ISNULL((select max(f.start_date) from i2b2fact f where f.encounter_num = v.encounter_num group by f.encounter_num), start_date)) end_datetime,  
 	provider.provider_id, --insert provider id instead of '0.'
-(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518',v.inout_cd  
+(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518' as visit_type_concept_id,v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 inner join visit_provids t on t.encounter_num=v.encounter_num
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
