@@ -1806,7 +1806,7 @@ cast(m.start_Date as datetime) measurement_datetime,
 CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
 -- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
-isnull(isnull(m.i_unit, m.Units_CD),'') unit_source_value, 
+isnull(isnull(lab.i_unit, m.Units_CD),'') unit_source_value, 
 
 -- TODO: Need to get normal ranges working again
 --nullif(lab.NORM_RANGE_LOW,'') range_low,
@@ -1827,7 +1827,7 @@ inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id
 --left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
 -- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
-left outer join i2o_unitsmap u2 on u.units_name=m.i_unit
+left outer join i2o_unitsmap u2 on u.units_name=lab.i_unit
 left outer join provider on m.provider_id = provider.provider_source_value --provider support
 
 
