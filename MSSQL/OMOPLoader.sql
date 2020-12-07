@@ -1805,7 +1805,8 @@ cast(m.start_Date as datetime) measurement_datetime,
 -- NOTE: Are these concept_ids the ones analysts want?
 CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
-isnull(m.Units_CD,'') unit_source_value, 
+-- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
+isnull(isnull(m.i_unit, m.Units_CD),'') unit_source_value, 
 
 -- TODO: Need to get normal ranges working again
 --nullif(lab.NORM_RANGE_LOW,'') range_low,
@@ -1813,7 +1814,8 @@ isnull(m.Units_CD,'') unit_source_value,
 null range_low, null range_high,
 
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END value_source_value,
-isnull(u.concept_id, '0') unit_concept_id, 
+-- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
+isnull(isnull(u2.concept_id, u.concept_id), '0') unit_concept_id, 
 isnull(omap.concept_id, '0') measurement_concept_id, 
 isnull(omap.source_id, '0') measurement_source_concept_id, 
 '44818702', provider.provider_id, '0'
@@ -1823,7 +1825,9 @@ inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_o
 inner join (select * from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
 inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
 --left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+-- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
+left outer join i2o_unitsmap u2 on u.units_name=m.i_unit
 left outer join provider on m.provider_id = provider.provider_source_value --provider support
 
 
