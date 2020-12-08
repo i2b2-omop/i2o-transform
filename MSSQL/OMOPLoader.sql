@@ -1820,7 +1820,7 @@ isnull(omap.source_id, '0') measurement_source_concept_id,
 
 FROM i2b2fact M  
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
-inner join (select * from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
+inner join (select distinct i_stdcode,c_basecode from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
 inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
 --left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
