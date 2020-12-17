@@ -1776,7 +1776,7 @@ begin
 
 SET @START_TIME = GETDATE();
 -- Build Modifiers
-exec build_modifiers lab
+--exec build_modifiers lab
 
 INSERT INTO dbo.[measurement]
      ([person_id]
@@ -1797,7 +1797,8 @@ INSERT INTO dbo.[measurement]
       ,[provider_id]
       ,[operator_concept_id])
 
-SELECT DISTINCT  M.patient_num person_id,
+SELECT
+M.patient_num person_id,
 M.encounter_num visit_occurrence_id,
 isnull(lab.i_stdcode, '') measurement_source_value,
 Cast(m.start_date as DATE) measurement_date,   
@@ -1818,45 +1819,49 @@ CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(
 isnull(isnull(u2.concept_id, u.concept_id), '0') unit_concept_id, 
 isnull(omap.concept_id, '0') measurement_concept_id, 
 isnull(omap.source_id, '0') measurement_source_concept_id, 
-'44818702', provider.provider_id, '0'
+'44818702'
+, provider.provider_id
+, '0'
 
 FROM i2b2fact M  
-inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
 inner join (select * from (
 				select c_basecode
 					, i_stdcode
 					, i_unit
 					, i_date_of_xml_creation
-					, row_number() over (partition by c_basecode order by i_date_of_xml_creation) as rnk
-				from i2o_ontology_lab where i_stddomain='LOINC') x 
+					, row_number() over (partition by c_basecode order by i_date_of_xml_creation desc) as rnk
+				from i2o_ontology_lab
+				where i_stddomain='LOINC'
+				and i_stdcode is not null
+				and i_stdcode != '') x 
 			where x.rnk = 1) lab on lab.c_basecode  = M.concept_cd
 inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
---left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
 -- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
-left outer join i2o_unitsmap u2 on u.units_name=lab.i_unit
+left outer join i2o_unitsmap u2 on u2.units_name=lab.i_unit
 left outer join provider on m.provider_id = provider.provider_source_value --provider support
 
 
-LEFT OUTER JOIN
-temp_mod_priority p
-ON  M.patient_num=p.patient_num
-and M.encounter_num=p.encounter_num
-and M.provider_id=p.provider_id
-and M.concept_cd=p.concept_Cd
-and M.start_date=p.start_Date
-and M.instance_num = p.instance_num
+--LEFT OUTER JOIN
+--temp_mod_priority p
+--ON  M.patient_num=p.patient_num
+--and M.encounter_num=p.encounter_num
+--and M.provider_id=p.provider_id
+--and M.concept_cd=p.concept_Cd
+--and M.start_date=p.start_Date
+--and M.instance_num = p.instance_num
  
-LEFT OUTER JOIN
-temp_mod_result_loc l
-ON  M.patient_num=l.patient_num
-and M.encounter_num=l.encounter_num
-and M.provider_id=l.provider_id
-and M.concept_cd=l.concept_Cd
-and M.start_date=l.start_Date
-and M.instance_num = l.instance_num
+--LEFT OUTER JOIN
+--temp_mod_result_loc l
+--ON  M.patient_num=l.patient_num
+--and M.encounter_num=l.encounter_num
+--and M.provider_id=l.provider_id
+--and M.concept_cd=l.concept_Cd
+--and M.start_date=l.start_Date
+--and M.instance_num = l.instance_num
  
 WHERE  m.MODIFIER_CD='@';
+
 
 SET @END_TIME = GETDATE();
 PRINT 'OMOPMEASUREMENT_LAB EXECUTION TIME: ' +  CAST(datediff(s, @start_time, @end_time) as nvarchar(50));
