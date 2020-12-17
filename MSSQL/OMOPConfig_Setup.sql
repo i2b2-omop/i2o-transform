@@ -7,7 +7,7 @@
 --              This script does the following ...
 --                     1) Create a local i2o_transform_config table if it does not already exist and fills it with default values.
 --							NOTE: Change the default values to instutiion specific values prior to running OMOPLoader script
---                     2) Create a local i2o_config_modifier table if it does not already existi and fills it with default values taht you may want to change
+--                     2) Create a local i2o_config_modifier table if it does not already existi and fills it with default values that you may want to change
 --							NOTE: Change the default values to instutiion specific values prior to running OMOPLoader script
 --                     3) Create a local i2b2patient_list table that must exist before the OMOPLoader script can be run.
 --                          NOTE: OMOPLoader script uses this table in creation of a view.

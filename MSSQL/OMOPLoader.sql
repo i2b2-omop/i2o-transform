@@ -1822,7 +1822,14 @@ isnull(omap.source_id, '0') measurement_source_concept_id,
 
 FROM i2b2fact M  
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
-inner join (select * from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
+inner join (select * from (
+				select c_basecode
+					, i_stdcode
+					, i_unit
+					, i_date_of_xml_creation
+					, row_number() over (partition by c_basecode order by i_date_of_xml_creation) as rnk
+				from i2o_ontology_lab where i_stddomain='LOINC') x 
+			where x.rnk = 1) lab on lab.c_basecode  = M.concept_cd
 inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
 --left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
 -- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
