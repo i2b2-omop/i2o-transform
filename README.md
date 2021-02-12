@@ -46,12 +46,15 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 4. Download and run the [MSSQL version](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) of the transform. (Oracle version not currently available.)
     1. Create a database for your OMOP tables and run the OMOP DDL there. Our transform requires that they be on the same server as your i2b2 instance - though you can move them later.
     2. Make sure the database user that will be running the scripts can also read from your i2b2 data and ontology databases. 
-    3. From your new OMOP database, open the OMOPLoader.sql script.  Edit the preamble to match your local setup, according to the instructions in the file. This now includes the following:
+    3. *Config script. (TBD)* <-- once
+    4. *PreparePCORnetOntology* <-- after any changes to ontology or omop concept table
+    5. *LocalChangesToPointToLocalOntologies*
+    6. From your new OMOP database, open the OMOPLoader.sql script.  Edit the preamble to match your local setup, according to the instructions in the file. This now includes the following:
         * synonym names 
         * the USE line 
         * Change 'LOINC:' in the lab results procedure to whatever term your local site uses. 
-    4. This script will delete your existing OMOP tables. If you do not want this behavior, please back them up.
-    5. Run the script.
+    7. This script will delete your existing OMOP tables. If you do not want this behavior, please back them up.
+    8. Run the script.
 
 5. From your i2b2 database: Download, install, and map your i2b2 data to v3.1 or later of the [ARCH Ontology](https://github.com/ARCH-commons/arch-ontology/blob/master/Documentation/INSTALL.md)
 
