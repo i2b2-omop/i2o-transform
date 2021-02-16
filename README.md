@@ -39,6 +39,11 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 
 ### Installation guide:
 
+#### i2b2 side
+1. From your i2b2 database: Download, install, and map your i2b2 data to v3.1 or later of the [ARCH Ontology](https://github.com/ARCH-commons/arch-ontology/blob/master/Documentation/INSTALL.md)
+    1. You must run [PreparePCORnetOntology](https://github.com/i2b2-omop/i2o-transform/blob/covid_dev/MSSQL/preparePCORnetOntology.sql) one time to add the custom columns required to the ontology. You will need to run this again if you change your i2b2 ontology.
+    2. If you have an alternate lab ontology, also load this ontology in your i2b2 database, with an extra column i_stdcode for LOINC codes and i_stddomain with the entry 'LOINC' for every row that should be transformed. (The ARCH ontology can serve as an example, if you've run the previous step.)
+
 #### OMOP side
 1. Create a target database for your OMOP tables and perform the next three major numbered steps on that database. Our transform requires that they be on the same server (but not the same database) as your i2b2 instance - though you can move them later.
 2. Download and run the [OMOP DDL](https://github.com/OHDSI/CommonDataModel/releases) to create the OMOP tables. This has been tested with OMOP 5.2.
@@ -51,10 +56,6 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
     6. From your new OMOP database, run the OMOPLoader.sql script to load the stored procedures.
     8. Run the run.sql script to transform your data. 
 
-#### i2b2 side
-5. From your i2b2 database: Download, install, and map your i2b2 data to v3.1 or later of the [ARCH Ontology](https://github.com/ARCH-commons/arch-ontology/blob/master/Documentation/INSTALL.md)
-    1. You must run [PreparePCORnetOntology](https://github.com/i2b2-omop/i2o-transform/blob/covid_dev/MSSQL/preparePCORnetOntology.sql) one time to add the custom columns required to the ontology. You will need to run this again if you change your i2b2 ontology.
-    2. If you have an alternate lab ontology, also load this ontology in your i2b2 database, with an extra column i_stdcode for LOINC codes and i_stddomain with the entry 'LOINC' for every row that should be transformed. (The ARCH ontology can serve as an example, if you've run the previous step.)
 
 ### Each time you want to transform your data:
 1. From your OMOP database, execute the run script in the [MSSQL directory of our GitHub](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) to transform your data. You can skip the OMOPPrep line if your i2b2 data has not changed since the last run.
