@@ -11,7 +11,7 @@ _Presently this is an alpha version!_
 ### Current status:
 This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Requirements](https://sites.google.com/view/ehrupload/omop-tables). It currently runs on MSSQL _only_ and transforms the following tables in OMOP v5.2 format:
 
-#### Fully supported in [current release](https://github.com/i2b2-omop/i2o-transform/releases/tag/0.1)
+#### Supported in [initial release](https://github.com/i2b2-omop/i2o-transform/releases/tag/0.1)
 * person: populated from patient_dimension
 * visit_occurrence: populated from visit_dimension
 * condition_occurrence: populated from diagnosis data
@@ -19,7 +19,7 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 * procedure_occurrence: populated from procedure data
 * measurement: populated with vital signs and labs (only tested on PCORI lab subset)
 
-#### Supported in [repository code](https://github.com/i2b2-omop/i2o-transform/tree/0.1/MSSQL) (see more detail in the [CHANGELOG](https://github.com/i2b2-omop/i2o-transform/blob/master/CHANGELOG.md))
+#### Now supported in second release (see more detail in the [CHANGELOG](https://github.com/i2b2-omop/i2o-transform/blob/master/CHANGELOG.md))
 * measurement: populated with diagnosis, procedure, vital signs, and labs (testing presently on full LOINC ontology)
 * observation: populated with diagnosis and procedure data
 * drug_exposure: populated with medication and procedure data
