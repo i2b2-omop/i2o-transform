@@ -8,86 +8,185 @@
 -- FYI, now the diagnosis and procedure transforms write to four multiple target tables
 --
 -- INSTRUCTIONS:
--- 1. Edit the "create synonym" statements, parameters, and the USE statement at the top of this script to point at your objects. 
---    This script will be run from an OMOP database you must have created.
--- 2. In the Second part of this preamble, there are two functions that need to be edited depending on the base units used at your site: unit_ht() and unit_wt(). 
---      Use the corresponding RETURN statement depending on which units your site uses: 
---      Inches (RETURN 1) versus Centimeters(RETURN 0.393701) and Pounds (RETURN 1) versus Kilograms(RETURN 2.20462). 
--- 3. USE your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
--- 4. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
--- 4. Run this script to set up the loader
--- 5. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
-
+-- 1. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
+-- 2. Run OMOPConfig_Setup.sql first if you have not already.
+--          a) Review the default values set by OMOPConfig_setup.sql and update or modify them as needed for your environment.
+-- 3. Run this script to set up the loader
+--          a) Use your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
+-- 4. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
 ----------------------------------------------------------------------------------------------------------------------------------------
--- create synonyms to make the code portable - please edit these
 ----------------------------------------------------------------------------------------------------------------------------------------
 
--- Change to your omop database
-use i2b2stub;
-go
-
--- drop any existing synonyms
+----------------------------------------------------------------------------------------------------------
+--Drop synonyms/views for i2b2 datamart
+----------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2patient')) DROP VIEW i2b2patient
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2concept') DROP SYNONYM i2b2concept
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2fact') DROP SYNONYM i2b2fact
-IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2patient') DROP SYNONYM  i2b2patient
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2visit') DROP SYNONYM  i2b2visit
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2provider') DROP SYNONYM i2b2provider
+
+
+--Remove deprecated synonyms/views 
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'provider_dimension') DROP SYNONYM  provider_dimension
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2patient') DROP SYNONYM  i2b2patient
+
+-------------------------------------------------------------------------------------------------------
+-- Create synonyms/views for i2b2 datamart  based on values in i2o_transform_config table
+-------------------------------------------------------------------------------------------------------
+DECLARE @SQL nvarchar(4000)
+DECLARE @SCHEMA nvarchar(100)
+
+BEGIN TRY
+	SET @SCHEMA = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'i2b2mart.db.schema.')
+END TRY
+BEGIN CATCH
+	RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+END CATCH
+IF NOT EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2patient'))
+	BEGIN TRY
+		SET @SQL = 'create view i2b2patient as select * from ' + @SCHEMA + N'patient_dimension where patient_num in (select patient_num from i2b2patient_list)'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2concept')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2concept for ' + @SCHEMA + 'concept_dimension'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2fact')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2fact for ' + @SCHEMA + 'observation_fact'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2visit')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2visit for ' + @SCHEMA + 'visit_dimension'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'i2b2provider')
+	BEGIN TRY
+		SET @SQL = 'create synonym i2b2provider for ' + @SCHEMA + 'provider_dimension'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+GO
+
+----------------------------------------------------------------------------------------------------------
+--Drop synonyms/views for i2b2 datamart
+----------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_diag') DROP SYNONYM pcornet_diag
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_demo') DROP SYNONYM pcornet_demo
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_proc') DROP SYNONYM pcornet_proc
-IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_lab') DROP SYNONYM pcornet_lab
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_med') DROP SYNONYM pcornet_med
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_vital') DROP SYNONYM pcornet_vital
 IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enc') DROP SYNONYM pcornet_enc
-IF OBJECTPROPERTY (object_id('dbo.getDataMartID'), 'IsScalarFunction') = 1 DROP function getDataMartID
-IF OBJECTPROPERTY (object_id('dbo.getDataMartName'), 'IsScalarFunction') = 1 DROP function getDataMartName
-IF OBJECTPROPERTY (object_id('dbo.getDataMartPlatform'), 'IsScalarFunction') = 1 DROP function getDataMartPlatform
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enroll') DROP SYNONYM pcornet_enroll
+IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontology_lab')) DROP VIEW i2o_ontology_lab
+--IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontology_drug')) DROP VIEW i2o_ontology_drug
+
+--Remove deprecated synonyms/views
+IF  EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_lab') DROP SYNONYM pcornet_lab
 GO
 
--- This table needs to be created before the synonyms
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[i2b2patient_list]') AND type in (N'U'))
-DROP TABLE [dbo].[i2b2patient_list]
-GO
-CREATE TABLE [dbo].[i2b2patient_list]  ( 
-	[patient_num]	int NOT NULL 
-	)
-GO
+-------------------------------------------------------------------------------------------------------
+-- Create synonyms/views for ontologies based on values in i2o_transform_config table
+-------------------------------------------------------------------------------------------------------
+DECLARE @SQL nvarchar(4000)
+DECLARE @TABLE_NAME nvarchar(100)
 
--- You will almost certainly need to edit your database name
--- Synonyms for dimension tables
--- NOTE If this synonym doesn't work, run pcornet_prep and try again
-create synonym i2b2visit for i2b2demodata..visit_dimension
-GO 
-create view i2b2patient as select * from i2b2demodata..patient_dimension where patient_num in (select patient_num from i2b2patient_list)
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_demo')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.demo.db.schema.table')
+		SET @SQL = 'create synonym pcornet_demo for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_diag')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.diag.db.schema.table')
+		SET @SQL = 'create synonym pcornet_diag for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_proc')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.proc.db.schema.table')
+		SET @SQL = 'create synonym pcornet_proc for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_med')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.med.db.schema.table')
+		---------------------------------------------------------------------------------------
+		-- To be removed once all references to pcornet_med have been removed and replaced with i2o_ontology_drug
+		---------------------------------------------------------------------------------------
+		   SET @SQL = 'create synonym pcornet_med for ' + @TABLE_NAME 
+		   EXEC SP_EXECUTESQL @SQL
+		---------------------------------------------------------------------------------------
+		SET @SQL = 'create view i2o_ontology_drug as (select * from ' + @TABLE_NAME + ')'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_vital')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.vital.db.schema.table')
+		SET @SQL = 'create synonym pcornet_vital for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enc')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.enc.db.schema.table')
+		SET @SQL = 'create synonym pcornet_enc for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.synonyms WHERE name = N'pcornet_enroll')
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.enroll.db.schema.table')
+		SET @SQL = 'create synonym pcornet_enroll for ' + @TABLE_NAME 
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF NOT EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontology_lab'))
+	BEGIN TRY
+		SET @TABLE_NAME = (SELECT tc.VALUE FROM i2o_transform_config tc where tc.[key] = 'ontology.lab.db.schema.table')
+		SET @SQL = 'create view i2o_ontology_lab as (select * from  ' + @TABLE_NAME + ')'
+		EXEC SP_EXECUTESQL @SQL
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
 GO
-create synonym i2b2fact for  i2b2demodata..observation_fact    
-GO
-create synonym i2b2concept for  i2b2demodata..concept_dimension  
-GO
-create synonym provider_dimension for i2b2demodata..provider_dimension
-GO
-
--- You will almost certainly need to edit your database name
--- Synonyms for ontology dimensions and loyalty cohort summary
--- The synonyms in comments have identical names to the tables - 
--- you will only need to edit and uncomment if your tables have
--- names other than these
-
---create synonym pcornet_med for i2b2stub..pcornet_med
---GO
---create synonym pcornet_lab for i2b2stub..pcornet_lab
---GO
---create synonym pcornet_diag for i2b2stub..pcornet_diag
---GO 
---create synonym pcornet_demo for i2b2stub..pcornet_demo 
---GO
---create synonym pcornet_proc for i2b2stub..pcornet_proc_nocpt
---GO
---create synonym pcornet_vital for i2b2stub..pcornet_vital
---GO
---create synonym pcornet_enc for i2b2stub..pcornet_enc
---GO
 
 -- Create the demographics codelist (no need to modify)
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[omop_codelist]') AND type in (N'U'))
@@ -110,37 +209,46 @@ IF OBJECTPROPERTY (object_id('dbo.unit_ht'), 'IsScalarFunction') = 1 DROP functi
 IF OBJECTPROPERTY (object_id('dbo.unit_wt'), 'IsScalarFunction') = 1 DROP function unit_wt
 go
 
-CREATE FUNCTION unit_ht() RETURNS float(10) AS BEGIN 
-    RETURN 1 -- Use this statement if your site stores HT data in units of Inches 
---    RETURN 0.393701 -- Use this statement if your site stores HT data in units of Centimeters 
-END
-GO
-
-CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN 
-    RETURN 1 -- Use this statement if your site stores WT data in units of Pounds 
---    RETURN 2.20462 -- Use this statement if your site stores WT data in units of Kilograms  
-END
-GO
-
-----------------------------------------------------------------------------------------------------------------------------------------
--- Update the loyalty cohort filter set - you will need to point this to your local database name
--- This is optional, if you have not run the loyalty cohort it will create an empty view
--- Also set the loyalty cohort time period - this should be dynamic in a future update - right now it can be left alone
--- Filters selected (61511) include: Has age and sex, Has race, Lives in same state as hospital,Has data in the first and last 18 months,Has diagnoses,Is alive,Is not in the bottom 10% of fact count 
-----------------------------------------------------------------------------------------------------------------------------------------
-IF  EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID('i2b2loyalty_patients')) DROP VIEW i2b2loyalty_patients
-GO
-DECLARE @SQL as varchar(4000)
-IF  OBJECT_ID(N'.[dbo].[loyalty_cohort_patient_summary]','U') IS NOT NULL ---Need to put in a DB name before .[dbo] for your datamart.
-SET @SQL='
-create view i2b2loyalty_patients as
-(select patient_num,cast(''2010/7/1'' as datetime) period_start,cast(''2014/7/1'' as datetime) period_end from PCORI_Mart..loyalty_cohort_patient_summary where filter_set & 61511 = 61511 and patient_num in (select patient_num from i2b2patient))'
-ELSE
-SET @SQL='
-create view i2b2loyalty_patients as
-(select top 0 patient_num,cast(''2010/1/1'' as datetime) period_start,cast(''2010/1/1'' as datetime) period_end from i2b2patient)'
-
-EXEC(@SQL)
+DECLARE @SQL nvarchar(4000)
+DECLARE @UNIT_TYPE nvarchar(50)
+SET @UNIT_TYPE = (SELECT tc.VALUE FROM i2o_transform_config tc WHERE tc.[key] = N'height.units');
+IF @UNIT_TYPE = 'IMPERIAL'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_ht() RETURNS float(10) AS BEGIN RETURN 1 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores HT data in units of Inches 
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF @UNIT_TYPE = 'METRIC'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_ht() RETURNS float(10) AS BEGIN RETURN 0.393701 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores HT data in units of Centimeters
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+SET @UNIT_TYPE = (SELECT tc.VALUE FROM i2o_transform_config tc WHERE tc.[key] = 'weight.units');
+IF @UNIT_TYPE = 'IMPERIAL'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN RETURN 1 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores WT data in units of Pounds
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH
+IF @UNIT_TYPE = 'METRIC'
+	BEGIN TRY
+		SET @SQL = 'CREATE FUNCTION unit_wt() RETURNS float(10) AS BEGIN RETURN 2.20462 END'
+		EXEC SP_EXECUTESQL @SQL
+		-- Use this statement if your site stores WT data in units of Kilograms
+	END TRY
+	BEGIN CATCH
+		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
+	END CATCH 
 GO
 
 -----------------------------------------------------------------------------------------------------------------
@@ -779,29 +887,30 @@ EXEC('DROP TABLE #concept_map')
 
 -- New 04-20, no now builds i2o-mapping on the fly, which was needed for labs and drug exposure
 
--- Add labs from pcornet_lab
-select distinct omop_sourcecode, c2.concept_id,c2.domain_id
+-- Add labs from the ontology
+select distinct c1.concept_code source_code, c1.concept_id source_id, convert(int, c2.concept_id) concept_id,convert(varchar(20),c2.domain_id) domain_id -- convert is to allow nulls
 into i2o_mapping
-from pcornet_lab d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
+from i2o_ontology_lab d inner join concept c1 on (c1.concept_code=d.i_stdcode and d.i_stddomain='LOINC' and c1.domain_id='Measurement')
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
 inner join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Measurement';
 
--- Add to mapping table for Drug
-insert into i2o_mapping(omop_sourcecode,concept_id,domain_id)
-select distinct omop_sourcecode, c2.concept_id,c2.domain_id
-from pcornet_med d inner join concept c1 on c1.concept_id=d.OMOP_SOURCECODE
-inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-inner join concept c2 ON c2.concept_id =cr.concept_id_2
+-- Add drugs from the ontology
+-- Note: left joins to support non-standard codes (no mapping) in i2o-2020.
+insert into i2o_mapping(source_code, source_id,concept_id,domain_id)
+select distinct c1.concept_code source_code, c1.concept_id source_id, c2.concept_id,isnull(c2.domain_id,c1.domain_id)
+from i2o_ontology_drug d inner join concept c1 on (c1.concept_code=d.i_stdcode and (d.i_stddomain='RxNorm' or d.i_stddomain='NDC') and c1.domain_id='Drug')
+left join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
+left join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
 and c2.invalid_reason is null
 and c2.domain_id='Drug';
 
 -- Index it
 CREATE NONCLUSTERED INDEX [i2omap_index]
-	ON [dbo].[i2o_mapping]([omop_sourcecode]);
+	ON [dbo].[i2o_mapping]([source_code]);
 
 end
 go
@@ -843,12 +952,12 @@ insert into visit_occurrence with(tablock) (person_id,visit_occurrence_id,visit_
 		visit_end_date,visit_end_datetime,provider_id,  
 		visit_concept_id ,care_site_id,visit_type_concept_id,visit_source_value) 
 select distinct v.patient_num, v.encounter_num,  
-	start_Date, 
-	cast(start_Date as datetime), 
-	(case when end_date is not null then end_date else start_date end) end_Date, 
-	(case when end_date is not null then cast(end_Date as datetime) else cast(start_date as datetime) end),  
+	convert(date, start_Date) as visit_start_date, 
+	start_Date as visit_start_datetime, 
+	ISNULL(convert(date, end_date), ISNULL((select convert(date, max(f.start_date)) from i2b2fact f where f.encounter_num = v.encounter_num group by f.encounter_num), convert(date, start_date))) end_Date, 
+	ISNULL(end_date, ISNULL((select max(f.start_date) from i2b2fact f where f.encounter_num = v.encounter_num group by f.encounter_num), start_date)) end_datetime,  
 	provider.provider_id, --insert provider id instead of '0.'
-(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518',v.inout_cd  
+(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518' as visit_type_concept_id,v.inout_cd  
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 inner join visit_provids t on t.encounter_num=v.encounter_num
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
@@ -875,11 +984,14 @@ create procedure OMOPObservationPeriod as
 begin
 
 INSERT INTO [Observation_Period]([person_id], [observation_period_start_date], [observation_period_end_date], [period_type_concept_id] ) 
-    select x.patient_num patid, case when l.patient_num is not null then l.period_start else enr_start end enr_start_date
-    , case when l.patient_num is not null then l.period_end when enr_end_end>enr_end then enr_end_end else enr_end end enr_end_date 
-    , case when l.patient_num is not null then 44814725 else 44814724 end enr_basis from 
-    (select patient_num, min(start_date) enr_start,max(start_date) enr_end,max(end_date) enr_end_end from i2b2visit where patient_num in (select person_id from person) group by patient_num) x
-    left outer join i2b2loyalty_patients l on l.patient_num=x.patient_num
+    select person_id
+		, ISNULL(min_start, ISNULL(dob, SYSDATETIME())) observation_period_start_date
+		, ISNULL(max_end, ISNULL(max_start, ISNULL(dob, SYSDATETIME()))) observation_period_end_date
+		, CASE when min_start IS NULL then 44814725 else 44814724 end period_type_concept_id
+	from (
+		select p.person_id, min(v.start_date) min_start, max(v.start_date) max_start, max(end_date) max_end, min(p.birth_datetime) dob from person p
+		left outer join i2b2visit v on p.person_id = v.patient_num
+		group by p.person_id) person_dates
 
 end
 go
@@ -911,7 +1023,7 @@ inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence with (tablock) (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
-select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, 
+select distinct factline.patient_num, factline.encounter_num encounterid, convert(date,factline.start_date), enc.provider_id, 
 case diag.mapped_domain when 'Condition' then diag.mapped_id else '0' END, -- insufficient, sometimes target domains are non-null and non-condition: isnull(diag.mapped_id, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
@@ -1102,8 +1214,8 @@ INSERT INTO dbo.[measurement]
       ,[operator_concept_id])
 
 Select distinct m.patient_num, m.encounter_num, substring(vital.i_loinc, 1, 50), 
-m.start_date meaure_date,   
-CAST(CONVERT(char(5), M.start_date, 108) as datetime) measure_time,
+convert(date, m.start_date) meaure_date,   
+M.start_date measure_time,
 '0', m.nval_num, substring(m.units_cd, 1, 50), substring(concat (tval_char, nval_num), 1, 50), 
 isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
 '44818701', provider.provider_id, '0'
@@ -1122,8 +1234,9 @@ go
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- LAB_RESULT_CM - Written by Jeff Klann, PhD and Arturo Torres, and Matthew Joss
+-- DEPRECATED! (04/9/20)
 ----------------------------------------------------------------------------------------------------------------------------------------
-
+/*
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPlabResultCM') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPlabResultCM;
 GO
 create procedure OMOPlabResultCM as
@@ -1241,10 +1354,11 @@ and m.MODIFIER_CD='@'
 
 END
 GO  
-
+*/
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- Prescribing - by Aaron Abend and Jeff Klann PhD and Matthew Joss with optimizations by Griffin Weber, MD, PhD
+-- Note that now a lot of deprecated codes have been removed entirely from the concept dictionary (pre-2007) and they get a 0 now
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- You must have run the meds_schemachange proc to create the PCORI_NDC and PCORI_CUI columns
 
@@ -1320,7 +1434,7 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
-select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
+select distinct m.patient_num, isnull(isnull(omap.concept_id,omap.source_id),0) , m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
  case 
    when basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%' then '38000177'
    when basis.c_fullname like '\PCORI_MOD\RX_BASIS\DI\%' then '38000175'
@@ -1333,7 +1447,7 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
 -- Note the only reason we need i2o_mapping is to figure which are standard codes, sourcecode already comes from RxCui
- left join i2o_mapping omap on mo.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Drug'
+ left join i2o_mapping omap on mo.i_stdcode=omap.source_code and omap.domain_id='Drug'
 
 -- TODO: This join adds several minutes to the load - must be debugged
 
@@ -1374,7 +1488,7 @@ select distinct m.patient_num, isnull(omap.concept_id,mo.omop_sourcecode), m.sta
     
     left outer join provider on m.provider_id = provider.provider_source_value --provider support MJ 6/17/18
 
-     where mo.omop_sourcecode is not null
+     where mo.i_stdcode is not null
 
 end
 GO
@@ -1557,10 +1671,188 @@ begin
 
 insert into provider(provider_id, provider_name, provider_source_value)
 select  distinct ROW_NUMBER() OVER (ORDER BY provider_id) New_ID, prov.name_char, prov.provider_id 
-from (select provider_id, min(NAME_CHAR) name_char from provider_dimension group by provider_id) prov
+from (select provider_id, min(NAME_CHAR) name_char from i2b2provider group by provider_id) prov
 
 end
 go
+
+----------------------------------------------------------------------------------------------------------------------------------------
+-- i2o v2020 - revising to no longer require any particular ontology - to support rapidly updating codesets with more agility
+-- Of course, OMOP and PCORI ontologies can be adapted to support this new method, for query interoperability. Scripts will be added to the repository.
+-- By Jeff Klann, PhD 04/2020
+----------------------------------------------------------------------------------------------------------------------------------------
+-- This procedure extracts modifiers into temp tables based on the configuration in i2o_config_modifier
+-- Now creates real tables called temp_mod_* - the calling procedure should drop them when done. (Global temp tables are across all dbs, and local temp tables only follow the inner scope, so were not feasible.)
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[build_modifiers]') AND type in (N'P', N'PC'))
+DROP PROCEDURE [dbo].[build_modifiers]
+GO
+
+create procedure [build_modifiers] (@domain varchar(20), @force_update int= 0) as
+--------------------------------------------------------------------------------
+--Description: For each entry in i2o_config_modifier table 
+--               Generates a temp table for joining modifier fields to a query
+--               Each temp table is indexed on person_id, encounter_num, provider_id, concept_cd, start_date, instance_num
+-- Input parameters: @domain -- domain the temp table modifier is used for (must match value in i2o_config_modifier.c_domain
+--                   @force_update -- Forces rebuilding of temp tables
+-- Notes: Temp tables persist only during a connection
+--        This procedure defaults to NOT overwriting a pre-existing temp table
+--        If you need the temp tables rebuilt during a single connection set parameter @force_update = 1
+---------------------------------------------------------------------------------
+--Variables
+declare @sqltext nvarchar (2000)
+declare @tablename varchar(50)
+declare @path varchar(400)
+declare @target_column varchar(50)
+declare @temp_tablename varchar(100)
+declare @temp_tableidx varchar(100)
+
+--Cursors
+declare getconfigsql cursor local for
+select c_tablename, c_path, c_target_column from i2o_config_modifier where c_domain=@domain
+
+begin
+	--Loop Cursor
+    open getconfigsql;
+    fetch next from getconfigsql into @tablename,@path,@target_column;
+    while @@fetch_status=0
+    begin
+
+		--Set table temp name and idx name
+		set @temp_tablename = 'temp_mod_' + @target_column;
+		set @temp_tableidx = @temp_tablename + '_cidx';
+
+		-- If force_update then drop existing temp table if it exists
+		IF @force_update = 1 
+			BEGIN
+					IF OBJECT_ID(@temp_tablename) IS NOT NULL
+						BEGIN TRY
+							set @sqltext = 'DROP TABLE ' + @temp_tablename;
+							exec sp_executesql @sqltext;
+						END TRY
+						BEGIN CATCH
+							RAISERROR('ERROR: Failed to execute %s', 0, 1, @sqltext) with NOWAIT;
+						END CATCH;
+			END;
+
+		-- If the temp table does not already exist create it and index it
+		IF OBJECT_ID(@temp_tablename) IS NULL
+			BEGIN TRY
+				set @sqltext = 'select patient_num, encounter_num, m.provider_id, concept_cd, start_date, instance_num, o.i_stdcode  ' +@target_column+' ' +
+					'into temp_mod_'+@target_column+' from i2b2fact M ' +
+					' inner join '+@tablename+' o on m.modifier_cd =o.c_basecode ' +
+					' where c_fullname LIKE '''+@path+ '%'''
+				exec sp_executesql @sqltext
+				set @sqltext = 'create clustered index ' + @temp_tableidx + ' on ' + @temp_tablename + '(patient_num, encounter_num, provider_id, concept_cd, start_date, instance_num)'
+				exec sp_executesql @sqltext
+				PRINT 'CREATED TEMPORARY TABLE ' + @TEMP_TABLENAME;
+			END TRY
+			BEGIN CATCH
+				raiserror('Error: Failed to execute: %s',0, 1, @sqltext) with NOWAIT;
+			END CATCH;
+
+        fetch next from getconfigsql into @tablename,@path,@target_column;
+    end
+	--Close Loop
+    close getconfigsql;
+    deallocate getconfigsql;
+end
+GO
+
+--exec build_modifiers lab
+--select patient_num, encounter_num, m.provider_id, concept_cd, start_date, o.i_stdcode  priority into #priority from i2b2fact M  inner join pcornet_lab o on m.modifier_cd =o.c_basecode  where c_fullname LIKE '\PCORI_MOD\PRIORITY\%'
+
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPmeasurementLab') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPmeasurementLab;
+GO
+create procedure [OMOPmeasurementLab] as
+--------------------------------------------------------------------
+-- DESCRIPTION: Inserts observation_facts that have loinc codes into measurment table
+-- Parameters: None
+-- Notes: None
+--------------------------------------------------------------------
+DECLARE @START_TIME DATETIME;
+DECLARE @END_TIME DATETIME;
+
+begin
+
+SET @START_TIME = GETDATE();
+-- Build Modifiers
+exec build_modifiers lab
+
+INSERT INTO dbo.[measurement]
+     ([person_id]
+      ,[visit_occurrence_id]
+      ,[measurement_source_value]
+      ,[measurement_date]
+      ,[measurement_datetime]
+      ,[value_as_concept_id]
+      ,[value_as_number]
+      ,[unit_source_value]
+      ,[range_low]
+      ,[range_high]
+      ,[value_source_value]
+      ,[unit_concept_id]
+      ,[measurement_concept_id]
+      ,[measurement_source_concept_id]
+      ,[measurement_type_concept_id]
+      ,[provider_id]
+      ,[operator_concept_id])
+
+SELECT DISTINCT  M.patient_num person_id,
+M.encounter_num visit_occurrence_id,
+isnull(lab.i_stdcode, '') measurement_source_value,
+Cast(m.start_date as DATE) measurement_date,   
+cast(m.start_Date as datetime) measurement_datetime,
+-- NOTE: Are these concept_ids the ones analysts want?
+CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
+CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
+isnull(m.Units_CD,'') unit_source_value, 
+
+-- TODO: Need to get normal ranges working again
+--nullif(lab.NORM_RANGE_LOW,'') range_low,
+--nullif(lab.NORM_RANGE_HIGH,'') range_high,
+null range_low, null range_high,
+
+CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END value_source_value,
+isnull(u.concept_id, '0') unit_concept_id, 
+isnull(omap.concept_id, '0') measurement_concept_id, 
+isnull(omap.source_id, '0') measurement_source_concept_id, 
+'44818702', provider.provider_id, '0'
+
+FROM i2b2fact M  
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
+inner join (select distinct i_stdcode,c_basecode from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
+inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
+--left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+left outer join i2o_unitsmap u on u.units_name=m.units_cd
+left outer join provider on m.provider_id = provider.provider_source_value --provider support
+
+
+LEFT OUTER JOIN
+temp_mod_priority p
+ON  M.patient_num=p.patient_num
+and M.encounter_num=p.encounter_num
+and M.provider_id=p.provider_id
+and M.concept_cd=p.concept_Cd
+and M.start_date=p.start_Date
+and M.instance_num = p.instance_num
+ 
+LEFT OUTER JOIN
+temp_mod_result_loc l
+ON  M.patient_num=l.patient_num
+and M.encounter_num=l.encounter_num
+and M.provider_id=l.provider_id
+and M.concept_cd=l.concept_Cd
+and M.start_date=l.start_Date
+and M.instance_num = l.instance_num
+ 
+WHERE  m.MODIFIER_CD='@';
+
+SET @END_TIME = GETDATE();
+PRINT 'OMOPMEASUREMENT_LAB EXECUTION TIME: ' +  CAST(datediff(s, @start_time, @end_time) as nvarchar(50));
+
+
+END
+GO  
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -1600,6 +1892,7 @@ go
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 11. Prep the patient list (formerly in run script)
 -- Also, populate the visit_provids table. It's very slow so we don't want to do this every time we run the transform.
+-- Note that this must be run every time i2b2 data is refreshed!
 -- TODO, consider moving this
 ----------------------------------------------------------------------------------------------------------------------------------------
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprep') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprep
@@ -1630,6 +1923,7 @@ GROUP BY enc.encounter_num
 
 end
 GO
+ 
 ----------------------------------------------------------------------------------------------------------------------------------------
 -- 12. Load Program
 -- If you pass a value >0 , OMOP prep is called to build the patient list
@@ -1673,9 +1967,9 @@ RAISERROR('OMOPdrug_exposure %s', 0, 1,@FLAG) WITH NOWAIT;
 exec OMOPvital
 set @FLAG=cast(getdate() as varchar(30))
 RAISERROR('OMOPvital %s', 0, 1,@FLAG) WITH NOWAIT;
-exec OMOPlabResultCM
+exec OMOPmeasurementLab
 set @FLAG=cast(getdate() as varchar(30))
-RAISERROR('OMOPlabResultCM %s', 0, 1,@FLAG) WITH NOWAIT;
+RAISERROR('OMOPmeasurementLab %s', 0, 1,@FLAG) WITH NOWAIT;
 exec OMOPprocedure
 set @FLAG=cast(getdate() as varchar(30))
 RAISERROR('OMOPprocedure %s', 0, 1,@FLAG) WITH NOWAIT;
