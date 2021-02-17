@@ -56,7 +56,6 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
     6. From your new OMOP database, run the OMOPLoader.sql script to load the stored procedures.
     8. Run the run.sql script to transform your data. 
 
-
 ### Each time you want to transform your data:
 1. From your OMOP database, execute the run script in the [MSSQL directory of our GitHub](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) to transform your data. You can skip the OMOPPrep line if your i2b2 data has not changed since the last run.
 

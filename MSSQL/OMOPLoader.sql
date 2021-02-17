@@ -1307,7 +1307,7 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --isnull(lab.pcori_basecode, 'NI') LAB_PX,
 --'LC'  LAB_PX_TYPE,
 Cast(m.start_date as DATE) RESULT_DATE,   
-CAST(CONVERT(char(5), M.start_date, 108) as datetime) RESULT_TIME,
+cast(m.start_Date as datetime) RESULT_TIME,
 isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END, '0') RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
