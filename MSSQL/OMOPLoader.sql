@@ -1824,17 +1824,8 @@ isnull(omap.source_id, '0') measurement_source_concept_id,
 , '0'
 
 FROM i2b2fact M  
-inner join (select * from (
-				select c_basecode
-					, i_stdcode
-					, i_unit
-					, i_date_of_xml_creation
-					, row_number() over (partition by c_basecode order by i_date_of_xml_creation desc) as rnk
-				from i2o_ontology_lab
-				where i_stddomain='LOINC'
-				and i_stdcode is not null
-				and i_stdcode != '') x 
-			where x.rnk = 1) lab on lab.c_basecode  = M.concept_cd
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
+inner join (select distinct i_stdcode,c_basecode, i_unit from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
 inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
 -- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
@@ -1861,7 +1852,6 @@ left outer join provider on m.provider_id = provider.provider_source_value --pro
 --and M.instance_num = l.instance_num
  
 WHERE  m.MODIFIER_CD='@';
-
 
 SET @END_TIME = GETDATE();
 PRINT 'OMOPMEASUREMENT_LAB EXECUTION TIME: ' +  CAST(datediff(s, @start_time, @end_time) as nvarchar(50));
