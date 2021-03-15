@@ -149,3 +149,39 @@ IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'ng/ml' )
 ELSE 
     INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
     VALUES ( 'ng/ml', 8842, 'S' );
+
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = '/100 wc' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 9032,
+		standard_concept = 'S'
+    WHERE units_name = '/100 wc';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( '/100 wc', 9032, 'S' );
+	
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'pg' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8564,
+		standard_concept = 'S'
+    WHERE units_name = 'pg';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'pg', 8564, 'S' );
+		
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'th/mm3' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8961,
+		standard_concept = 'S'
+    WHERE units_name = 'th/mm3';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'th/mm3', 8961, 'S' );
+	
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = '/100 wbcs' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 9032,
+		standard_concept = 'S'
+    WHERE units_name = '/100 wbcs';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( '/100 wbcs', 9032, 'S' );

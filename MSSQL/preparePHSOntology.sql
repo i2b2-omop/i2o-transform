@@ -1,19 +1,17 @@
 ---------------------------------------------------------------------------------------------
 -- Mass General Brigham specific modifications 
 -- Description: i2o_transform works off the PCORNET ARCH ontologies, following script
---              --Modifies the transformation to use i2b2 ontoloies in certain circumstances
---              --Adds manual mappings specific to Mass General Brigham
+--              --Prepares the transformation to use i2b2 ontoloies in certain circumstances
 -- Authored by: Jeff Klann
 -- Updated by: Kevin Embree on 2020-12-07 to use units specified in the MGB i2b2 XML
---             Added manual mappings for unit conversion
 --             Added extraction of xml creationDateTime onto i2b2metadata
 --------------------------------------------------------------------------------------------
 --------------------------------------------------------------------------------------------
 -- When to run....
--- After the initial install of the pcornet Ontology or updates to the preparePCORnetOntology.sql 
+-- After preparePCORnetOntology.sql 
 --	   Run the new preparePCORnetOntology.sql
--- Subsequent to preparePCORnetOntology.sql For Mass General Brigham users, after delivery of a new i2b2 datamart or updates to the PrepNewOMOPLoader_PHS.sql
---	   Run this script, PrepNewOMOPLoader_PHS.sql
+-- Run after import of a new i2b2metadata ontology table.
+--     This is done with each delivery of a new data mart.
 --------------------------------------------------------------------------------------------
 
 -- Set up the extra columns i_stdcode, i_stddomain
