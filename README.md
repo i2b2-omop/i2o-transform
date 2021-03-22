@@ -47,7 +47,7 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
 #### OMOP side
 1. Create a target database for your OMOP tables and perform the next three major numbered steps on that database. Our transform requires that they be on the same server (but not the same database) as your i2b2 instance - though you can move them later.
 2. Download and run the [OMOP DDL](https://github.com/OHDSI/CommonDataModel/releases) to create the OMOP tables. This has been tested with OMOP 5.2.
-        * When running the constraints, it is recommended to only run the primary key constraints and not the foreign key and other constraints. Although they provide useful data checks, they can cause ETL problems.
+   1. When running the constraints, it is recommended to only run the primary key constraints and not the foreign key and other constraints. Although they provide useful data checks, they can cause ETL problems.
 4. Install the [OMOP vocabulary](http://athena.ohdsi.org/vocabulary/list). Be sure to download all needed vocabularies, which is usually ICD-10 plus the default set. (Note that OMOPBuildMapping, run automatically in step 5.5, is dependent on the vocabulary being loaded. If you perform these steps out of order, you might need to manually run OMOPBuildMapping on your database.)
 5. Download and run the [MSSQL version](https://github.com/ARCH-commons/i2o-transform/tree/master/MSSQL) of the transform. (Oracle version not currently available.) Run all the following steps from the OMOP target database, not the i2b2 source database.
     1. Make sure the database user that will be running the scripts can also read from your i2b2 data and ontology databases. 
