@@ -14,7 +14,13 @@
 --     This is done with each delivery of a new data mart.
 --------------------------------------------------------------------------------------------
 
--- Set up the extra columns i_stdcode, i_stddomain
+--------------------------------------------------------------------------------------------
+-- Set up the extra columns ...
+-- i_stdcode for standard code extracted from c_metadataxml
+-- i_stddomain for the type of code was extracted from c_metadataxml ('LOINC', 'RXNORM', 'ICD9', etc...)
+-- i_unit for the unit of measure used for the given code ('Inches', 'rbc/1 ml', etc ...)
+-- i_date_of_xml_creation for the date the xml was created
+--------------------------------------------------------------------------------------------
 ALTER TABLE [dbo].[i2b2metadata]
 	ADD [i_stdcode] varchar(100) NULL, 
 	[i_stddomain] varchar(100) NULL,
@@ -61,7 +67,9 @@ valuexml.value('(/ValueMetadata/UnitValues/NormalUnits)[1]','VARCHAR(100)') Unit
 from t
 GO
 
--- Update to set i_stddomain, i_stdcode and i_unit all at once from XML no need for vw_LabTests_Reconstructed
+-------------------------------------------------------------------------------------------------------------
+-- Extract all LOINC codes, units, and xmll date of creation from c_metadataxml
+-------------------------------------------------------------------------------------------------------------
 update m set i_stddomain='LOINC'
       ,i_stdcode=try_cast(m.c_metadataxml as xml).value('(/ValueMetadata/Loinc)[1]','VARCHAR(50)')
 	  , i_unit = try_cast(m.c_metadataxml as xml).value('(/ValueMetadata/UnitValues/NormalUnits)[1]','VARCHAR(25)')
