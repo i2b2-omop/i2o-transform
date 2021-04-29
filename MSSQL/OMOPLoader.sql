@@ -19,10 +19,10 @@
 -- NOTES: After any new i2b2 Ontology run the following....
 --         1) preparePHSOntology.sql
 --         2) Stored procedure OMOPBuildMapping
---         3) AdditionalPHSMappings.sql
+--         3) ExtraUnitFromOntology.sql
 -- NOTES: After any new OMOP Vocabulary is installed run the following...
 --         1) Stored procedure OMOPBuildMapping
---         2) AdditionalPHSMappings.sql
+--         2) ExtraUnitFromOntology.sql
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1815,7 +1815,8 @@ cast(m.start_Date as datetime) measurement_datetime,
 -- NOTE: Are these concept_ids the ones analysts want?
 CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
--- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
+-- NOTE: lab.i_unit is a unit extracted from the i2b2 ontology c_metadataxml field) set per ontology entry/LOINC Code
+-- NOTE: m.units_cd is directly from the observation_fact table set per observation
 isnull(isnull(lab.i_unit, m.Units_CD),'') unit_source_value, 
 
 -- TODO: Need to get normal ranges working again
@@ -1824,7 +1825,8 @@ isnull(isnull(lab.i_unit, m.Units_CD),'') unit_source_value,
 null range_low, null range_high,
 
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END value_source_value,
--- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
+-- NOTE: u2.concept_id is an OMOP standard concept id mapped to a unit extracted from the i2b2 ontology c_metadataxml field) set per ontology entry/LOINC Code
+-- NOTE: u.concept_id is an OMOP standard concept id mapped to a unit directly from the observation_fact table set per observation
 isnull(isnull(u2.concept_id, u.concept_id), '0') unit_concept_id, 
 isnull(omap.concept_id, '0') measurement_concept_id, 
 isnull(omap.source_id, '0') measurement_source_concept_id, 
