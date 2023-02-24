@@ -386,7 +386,7 @@ Add drug_exposure_id Int Identity(1, 1)
 Go
 
 IF  EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS WHERE CONSTRAINT_NAME = 'xpk_observation_period') 
-	Alter table drug_exposure DROP constraint xpk_observation_period
+	Alter table observation_period DROP constraint xpk_observation_period
 Go
 Alter Table observation_period Drop Column observation_period_id
 Go
