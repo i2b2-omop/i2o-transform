@@ -56,6 +56,7 @@ This transforms i2b2 data into OMOP according to the [AllOfUs OMOP CDM Table Req
         * Names (including db and schema) of ARCH ontologies
     6. From your new OMOP database, run the OMOPLoader.sql script to load the stored procedures.
         * *Note 2023:* It appears qualifier_source_value has been removed from omop. References to these will need to be removed from the transform.
+        * *Note:* OMOPLoader.sql runs the procedure OMOPBuildMapping. If any of your mapping tables change (i2b2 ontologies or OMOP concept tables), you will need to rerun this stored procedure.
     8. Run the run.sql script to transform your data. 
 
 ### Each time you want to transform your data:
