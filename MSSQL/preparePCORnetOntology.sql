@@ -1,11 +1,16 @@
--- Modify the PCORnet ontology to be compatible with the new version of the OMOP transform, i2o 2020
--- Run this from your i2b2 database that has the mapped PCORnet ontology!
--- Jeff Klann PhD, April 2020
+--------------------------------------------------------------------------------------------------------
+-- Description: Prep the local PCORnet ontology for use in the OMOP transformation
+--				Run this from your i2b2 database that has the mapped PCORnet ontology!
+-- Authored By: Jeff Klann PhD, April 2020
+-- Updated on: 2020-12-07 by Kevin Embree 
+--              To include i_unit column to maintain compatibility with PHS specific logic
+--------------------------------------------------------------------------------------------------------
 
--- Set up the extra columns i_stdcode, i_stddomain for labs
+-- Set up the extra columns i_stdcode, i_stddomain, i_unit for labs
 ALTER TABLE [dbo].[pcornet_lab]
 	ADD [i_stdcode] varchar(50) NULL, 
-	[i_stddomain] varchar(25) NULL
+	[i_stddomain] varchar(25) NULL,
+	[i_unit] varchar(25) NULL
 GO
 CREATE NONCLUSTERED INDEX [pcornetlab_stdcode]
 	ON [dbo].[pcornet_lab]([i_stdcode])

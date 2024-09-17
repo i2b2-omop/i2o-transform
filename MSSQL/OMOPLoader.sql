@@ -11,9 +11,18 @@
 -- 1. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
 -- 2. Run OMOPConfig_Setup.sql first if you have not already.
 --          a) Review the default values set by OMOPConfig_setup.sql and update or modify them as needed for your environment.
+-- 3. If you have new PCORNET Ontology run .... preparePCORnetOntology.sql
+-- 4. If you have a new i2b2 Ontology (i2b2metadata) run .... preparePHSOntology.sql
 -- 3. Run this script to set up the loader
 --          a) Use your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
 -- 4. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
+-- NOTES: After any new i2b2 Ontology run the following....
+--         1) preparePHSOntology.sql
+--         2) Stored procedure OMOPBuildMapping
+--         3) ExtraUnitFromOntology.sql
+-- NOTES: After any new OMOP Vocabulary is installed run the following...
+--         1) Stored procedure OMOPBuildMapping
+--         2) ExtraUnitFromOntology.sql
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -1307,7 +1316,7 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --isnull(lab.pcori_basecode, 'NI') LAB_PX,
 --'LC'  LAB_PX_TYPE,
 Cast(m.start_date as DATE) RESULT_DATE,   
-cast(m.start_Date as datetime) RESULT_TIME,
+CAST(CONVERT(char(5), M.start_date, 108) as datetime) RESULT_TIME,
 isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END, '0') RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
@@ -1776,7 +1785,7 @@ begin
 
 SET @START_TIME = GETDATE();
 -- Build Modifiers
-exec build_modifiers lab
+--exec build_modifiers lab
 
 INSERT INTO dbo.[measurement]
      ([person_id]
@@ -1797,7 +1806,8 @@ INSERT INTO dbo.[measurement]
       ,[provider_id]
       ,[operator_concept_id])
 
-SELECT DISTINCT  M.patient_num person_id,
+SELECT
+M.patient_num person_id,
 M.encounter_num visit_occurrence_id,
 isnull(lab.i_stdcode, '') measurement_source_value,
 Cast(m.start_date as DATE) measurement_date,   
@@ -1805,7 +1815,9 @@ cast(m.start_Date as datetime) measurement_datetime,
 -- NOTE: Are these concept_ids the ones analysts want?
 CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
-isnull(m.Units_CD,'') unit_source_value, 
+-- NOTE: lab.i_unit is a unit extracted from the i2b2 ontology c_metadataxml field) set per ontology entry/LOINC Code
+-- NOTE: m.units_cd is directly from the observation_fact table set per observation
+isnull(isnull(lab.i_unit, m.Units_CD),'') unit_source_value, 
 
 -- TODO: Need to get normal ranges working again
 --nullif(lab.NORM_RANGE_LOW,'') range_low,
@@ -1813,37 +1825,42 @@ isnull(m.Units_CD,'') unit_source_value,
 null range_low, null range_high,
 
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END value_source_value,
-isnull(u.concept_id, '0') unit_concept_id, 
+-- NOTE: u2.concept_id is an OMOP standard concept id mapped to a unit extracted from the i2b2 ontology c_metadataxml field) set per ontology entry/LOINC Code
+-- NOTE: u.concept_id is an OMOP standard concept id mapped to a unit directly from the observation_fact table set per observation
+isnull(isnull(u2.concept_id, u.concept_id), '0') unit_concept_id, 
 isnull(omap.concept_id, '0') measurement_concept_id, 
 isnull(omap.source_id, '0') measurement_source_concept_id, 
-'44818702', provider.provider_id, '0'
+'44818702'
+, provider.provider_id
+, '0'
 
 FROM i2b2fact M  
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
-inner join (select distinct i_stdcode,c_basecode from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
+inner join (select distinct i_stdcode,c_basecode, i_unit from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
 inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
---left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+-- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
+left outer join i2o_unitsmap u2 on u2.units_name=lab.i_unit
 left outer join provider on m.provider_id = provider.provider_source_value --provider support
 
 
-LEFT OUTER JOIN
-temp_mod_priority p
-ON  M.patient_num=p.patient_num
-and M.encounter_num=p.encounter_num
-and M.provider_id=p.provider_id
-and M.concept_cd=p.concept_Cd
-and M.start_date=p.start_Date
-and M.instance_num = p.instance_num
+--LEFT OUTER JOIN
+--temp_mod_priority p
+--ON  M.patient_num=p.patient_num
+--and M.encounter_num=p.encounter_num
+--and M.provider_id=p.provider_id
+--and M.concept_cd=p.concept_Cd
+--and M.start_date=p.start_Date
+--and M.instance_num = p.instance_num
  
-LEFT OUTER JOIN
-temp_mod_result_loc l
-ON  M.patient_num=l.patient_num
-and M.encounter_num=l.encounter_num
-and M.provider_id=l.provider_id
-and M.concept_cd=l.concept_Cd
-and M.start_date=l.start_Date
-and M.instance_num = l.instance_num
+--LEFT OUTER JOIN
+--temp_mod_result_loc l
+--ON  M.patient_num=l.patient_num
+--and M.encounter_num=l.encounter_num
+--and M.provider_id=l.provider_id
+--and M.concept_cd=l.concept_Cd
+--and M.start_date=l.start_Date
+--and M.instance_num = l.instance_num
  
 WHERE  m.MODIFIER_CD='@';
 
