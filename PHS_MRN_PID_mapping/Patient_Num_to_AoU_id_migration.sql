@@ -6,6 +6,7 @@
 --	            The OMOP transformation uses the i2b2 patient_num value as the patient_id used throughout the OMOP data schema
 -- Author: Kevin Embree
 -- Date Created: July 28th
+-- NOTE: deprecated in favor of stored procedures pmi_id_step1, pmi_id_step2, pmi_id_step3
 -----------------------------------------------------
 -----------------------------------------------------
 --set the database name containing the transformed OMOP tables

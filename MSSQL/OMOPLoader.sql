@@ -11,9 +11,19 @@
 -- 1. Make sure everything else is set up first! (e.g., concept tables, pcornet ontology, etc. - https://github.com/i2b2-omop/i2o-transform/blob/master/README.md)
 -- 2. Run OMOPConfig_Setup.sql first if you have not already.
 --          a) Review the default values set by OMOPConfig_setup.sql and update or modify them as needed for your environment.
--- 3. Run this script to set up the loader
+-- 3. If you have new PCORNET Ontology run .... preparePCORnetOntology.sql
+-- 4. If you have a new i2b2 Ontology (i2b2metadata) run .... preparePHSOntology.sql
+-- 5. Run this script to set up the loader
 --          a) Use your OMOP db and make sure it has privileges to read from the various locations that the synonyms point to.
--- 4. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
+-- 6. Run ExtraUnitFromOntology.sql
+-- 7. Use the included run_*.sql script to execute the procedure, or run manually via "exec OMOPLoader <number>" (will transform at most <number> patients)
+-- NOTES: After any new i2b2 Ontology run the following....
+--         1) preparePHSOntology.sql
+--         2) Stored procedure OMOPBuildMapping
+--         3) ExtraUnitFromOntology.sql
+-- NOTES: After any new OMOP Vocabulary is installed run the following...
+--         1) Stored procedure OMOPBuildMapping
+--         2) ExtraUnitFromOntology.sql
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
 
@@ -186,6 +196,17 @@ IF NOT EXISTS (SELECT * FROM sys.views WHERE object_id = OBJECT_ID(N'i2o_ontolog
 	BEGIN CATCH
 		RAISERROR('ERROR: Failed to execute %s', 0, 1, @SQL) with NOWAIT;
 	END CATCH
+GO
+
+-------------------------------------------------------------------------------------------------------------------------
+-- Add indexes for increased performance
+-------------------------------------------------------------------------------------------------------------------------
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = object_id(N'dbo.visit_occurrence') AND NAME = N'idx_visit_occurrence_id')
+	CREATE INDEX idx_visit_occurrence_id ON dbo.visit_occurrence(visit_occurrence_id);
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = object_id(N'dbo.provider') AND NAME = N'idx_provider_source')
+	CREATE INDEX idx_provider_source ON dbo.provider(provider_source_value);
 GO
 
 -- Create the demographics codelist (no need to modify)
@@ -888,9 +909,9 @@ EXEC('DROP TABLE #concept_map')
 -- New 04-20, no now builds i2o-mapping on the fly, which was needed for labs and drug exposure
 
 -- Add labs from the ontology
-select distinct c1.concept_code source_code, c1.concept_id source_id, convert(int, c2.concept_id) concept_id,convert(varchar(20),c2.domain_id) domain_id -- convert is to allow nulls
+select distinct c1.concept_code source_code, c1.vocabulary_id source_vocabulary_id, c1.concept_id source_id, convert(int, c2.concept_id) concept_id,convert(varchar(20),c2.domain_id) domain_id -- convert is to allow nulls
 into i2o_mapping
-from i2o_ontology_lab d inner join concept c1 on (c1.concept_code=d.i_stdcode and d.i_stddomain='LOINC' and c1.domain_id='Measurement')
+from i2o_ontology_lab d inner join concept c1 on (c1.concept_code=d.i_stdcode and d.i_stddomain='LOINC' and c1.vocabulary_id=d.i_stddomain and c1.domain_id='Measurement')
 inner join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
 inner join concept c2 ON c2.concept_id =cr.concept_id_2
 and c2.standard_concept ='S'
@@ -898,19 +919,56 @@ and c2.invalid_reason is null
 and c2.domain_id='Measurement';
 
 -- Add drugs from the ontology
--- Note: left joins to support non-standard codes (no mapping) in i2o-2020.
-insert into i2o_mapping(source_code, source_id,concept_id,domain_id)
-select distinct c1.concept_code source_code, c1.concept_id source_id, c2.concept_id,isnull(c2.domain_id,c1.domain_id)
-from i2o_ontology_drug d inner join concept c1 on (c1.concept_code=d.i_stdcode and (d.i_stddomain='RxNorm' or d.i_stddomain='NDC') and c1.domain_id='Drug')
-left join  concept_relationship cr   ON  c1.concept_id = cr.concept_id_1 and cr.relationship_id = 'Maps to'
-left join concept c2 ON c2.concept_id =cr.concept_id_2
-and c2.standard_concept ='S'
-and c2.invalid_reason is null
-and c2.domain_id='Drug';
+-- Update 6/2026: previously when multiple non-standard mappings existed, standard mapping was ignored.
+;with candidate_mappings as (
+    select distinct
+        c1.concept_code as source_code,
+        c1.vocabulary_id as source_vocabulary_id,
+        c1.concept_id as source_id,
+        c2.concept_id as concept_id,
+        isnull(c2.domain_id, c1.domain_id) as domain_id
+    from i2o_ontology_drug d
+    inner join concept c1
+        on c1.concept_code = d.i_stdcode
+       and (d.i_stddomain = 'RxNorm' or d.i_stddomain = 'NDC')
+       -- Concept codes are only unique within their source vocabulary.
+       and c1.vocabulary_id = d.i_stddomain
+       and c1.domain_id = 'Drug'
+    left join concept_relationship cr
+        on c1.concept_id = cr.concept_id_1
+       and cr.relationship_id = 'Maps to'
+    left join concept c2
+        on c2.concept_id = cr.concept_id_2
+       and c2.standard_concept = 'S'
+       and c2.invalid_reason is null
+       and c2.domain_id = 'Drug'
+),
+flagged_mappings as (
+    select
+        source_code,
+        source_vocabulary_id,
+        source_id,
+        concept_id,
+        domain_id,
+        max(case when concept_id is not null then 1 else 0 end)
+            over (partition by source_code, source_vocabulary_id, source_id) as has_mapped_concept
+    from candidate_mappings
+)
+insert into i2o_mapping(source_code, source_vocabulary_id, source_id, concept_id, domain_id)
+select
+    source_code,
+    source_vocabulary_id,
+    source_id,
+    concept_id,
+    domain_id
+from flagged_mappings
+where
+    concept_id is not null
+    or has_mapped_concept = 0;
 
 -- Index it
 CREATE NONCLUSTERED INDEX [i2omap_index]
-	ON [dbo].[i2o_mapping]([source_code]);
+	ON [dbo].[i2o_mapping]([source_code], [source_vocabulary_id]);
 
 end
 go
@@ -957,7 +1015,17 @@ select distinct v.patient_num, v.encounter_num,
 	ISNULL(convert(date, end_date), ISNULL((select convert(date, max(f.start_date)) from i2b2fact f where f.encounter_num = v.encounter_num group by f.encounter_num), convert(date, start_date))) end_Date, 
 	ISNULL(end_date, ISNULL((select max(f.start_date) from i2b2fact f where f.encounter_num = v.encounter_num group by f.encounter_num), start_date)) end_datetime,  
 	provider.provider_id, --insert provider id instead of '0.'
-(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, care.care_site_id, '44818518' as visit_type_concept_id,v.inout_cd  
+	-- =================================================================
+	-- Changed by Ana Holzbach, 03/27/2024
+	-- Code for LAB type visits based on visit_dimension.sourcesystem_cd
+	-- ================================================================= 
+--(case when e.omop_basecode is not null then e.omop_basecode else '0' end) enc_type, 
+  (case 
+			when (e.omop_basecode is not null and e.OMOP_BASECODE <> '') then e.omop_basecode 
+			when v.SOURCESYSTEM_CD like '%LAB%'  then '32036'
+			else '0' 
+		 end) enc_type, 
+care.care_site_id, '44818518' as visit_type_concept_id,v.inout_cd 
 from i2b2visit v inner join person d on v.patient_num=d.person_id
 inner join visit_provids t on t.encounter_num=v.encounter_num
 left outer join  pcornet_enc e on c_dimcode like '%'''+inout_cd+'''%' and e.c_fullname like '\PCORI\ENCOUNTER\ENC_TYPE\%'
@@ -968,6 +1036,116 @@ left outer join care_site care on v.location_cd = care.place_of_service_source_v
 end
 go
 
+----------------------------------------------------------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------------------------------------------------------------
+-- Encounter Secondary - by Ana Holzbach
+-- visit_occurrence records from observation_fact
+----------------------------------------------------------------------------------------------------------------------------------------
+IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPencounter_secondary') AND type in (N'P', N'PC'))
+DROP PROCEDURE OMOPencounter_secondary
+GO
+
+create procedure OMOPencounter_secondary 
+	
+AS
+BEGIN
+
+	SET NOCOUNT ON;
+---------------------------------------------------------------------------
+--- 1. 
+--- insert non-standard Observation codes that map to standard Visit codes
+--- as visits in temp table #visit_sec
+---------------------------------------------------------------------------
+select distinct
+	visit.patient_num as person_id,
+	visit.ENCOUNTER_NUM as visit_occurrence_id,
+	convert(date, visit.start_date) as visit_start_date, 
+	start_date as visit_start_datetime, 
+	ISNULL(convert(date, end_date), ISNULL((select convert(date, max(f.start_date)) from i2b2fact f where f.encounter_num = visit.encounter_num group by f.encounter_num), convert(date, start_date))) as visit_end_date, 
+	ISNULL(end_date, ISNULL((select max(f.start_date) from i2b2fact f where f.encounter_num = visit.encounter_num group by f.encounter_num), start_date)) as visit_end_datetime,  
+	p.provider_id,
+	st.concept_id as visit_concept_id,
+	care.care_site_id, -- in encounter proc: join between visit_dimension.location_cd and care_site works better
+	'44818518' as visit_type_concept_id,
+	null as visit_source_value -- in encounter proc: i2b2 visit_dimension.inout_cd -- join this with visit_dimension?
+
+	into #visit_sec
+
+from i2b2fact visit
+inner join visit_occurrence enc on enc.person_id = visit.patient_num and enc.visit_occurrence_id = visit.encounter_num -- Constraint to selected encounters
+inner join concept_map_px_obs prc on prc.c_basecode = visit.concept_cd
+left outer join provider p on visit.provider_id = p.provider_source_value
+left outer join concept nst on prc.concept_id = nst.concept_id and (nst.standard_concept <> 'S' or nst.standard_concept is null or nst.domain_id <> 'Observation') 
+join concept_relationship cr on nst.concept_id = cr.concept_id_1 
+join concept st on st.concept_id = cr.concept_id_2
+left outer join care_site care on visit.location_cd = care.place_of_service_source_value
+where cr.relationship_id = 'Maps To' and st.standard_concept = 'S' and st.domain_id = 'Visit'
+    
+--------------------------------------------------------------------------------------------------------------------
+--- 2. 
+--- for each record in #visit_sec with a matching visit_occurrence_id & person_id, and different concept_id:
+---			- if old concept_id is 0 and new is not, update record in visit_occurrence with new value
+---			  else
+---				- if old and new concepts are both in (9201, 9202, 9203) === WHAT TO DO WITH THESE?
+---				- if either old or new are not 9s, insert a new record in visit_detail
+-------------------------------------------------------------------------------------------------------------------
+declare @visit_id as int;
+declare @person_id as int;
+declare @new_code as int;
+declare @old_code as int;
+declare @recs as cursor;
+
+set @recs = cursor for
+	select st.visit_occurrence_id, st.person_id, st.visit_concept_id as new, v.visit_concept_id as old
+	from #visit_sec st
+	join visit_occurrence v
+	on st.person_id = v.person_id and st.visit_occurrence_id = v.visit_occurrence_id
+	where st.visit_concept_id <> v.visit_concept_id
+
+open @recs
+fetch next from @recs into @visit_id, @person_id, @new_code, @old_code
+
+while @@FETCH_STATUS = 0
+begin 
+	
+	if @old_code = '0'
+		update visit_occurrence set visit_concept_id = @new_code where visit_occurrence_id = @visit_id and person_id = @person_id;
+
+	else if @old_code not like '9%' or @new_code not like '9%' 
+
+				insert into visit_detail (
+										  visit_detail_concept_id,
+										  visit_detail_start_date,
+										  visit_detail_start_datetime,
+										  visit_detail_end_date,
+										  visit_detail_end_datetime,
+										  visit_detail_type_concept_id,
+										  provider_id,
+										  care_site_id, 
+										  visit_occurrence_id,
+										  person_id
+										  )
+					select @new_code, 
+						   voc.visit_start_date, 
+						   voc.visit_start_datetime, 
+						   voc.visit_end_date, 
+						   voc.visit_end_datetime,
+						   voc.visit_type_concept_id,
+						   voc.provider_id,
+						   voc.care_site_id,
+						   @visit_id,
+						   @person_id
+					from visit_occurrence voc
+						  where visit_occurrence_id = @visit_id and person_id = @person_id;
+
+	fetch next from @recs into @visit_id, @person_id, @new_code, @old_code
+end
+
+close @recs;
+deallocate @recs;
+
+END
+go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -1004,7 +1182,7 @@ go
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdiagnosis') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdiagnosis
 go
 
-create procedure OMOPdiagnosis as
+create procedure [dbo].[OMOPdiagnosis] as
 declare @sqltext nvarchar(4000)
 begin
 
@@ -1023,14 +1201,15 @@ inner join pcornet_diag dxsource on factline.modifier_cd =dxsource.c_basecode
 and dxsource.c_fullname like '\PCORI_MOD\PDX\%'
 
 insert into condition_occurrence with (tablock) (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
-select distinct factline.patient_num, factline.encounter_num encounterid, convert(date,factline.start_date), enc.provider_id, 
+select distinct factline.patient_num, factline.encounter_num encounterid, convert(date,factline.start_date), isnull(p.provider_id, enc.provider_id), 
 case diag.mapped_domain when 'Condition' then diag.mapped_id else '0' END, -- insufficient, sometimes target domains are non-null and non-condition: isnull(diag.mapped_id, '0'), 
 CASE WHEN (sf.c_fullname like '\PCORI_MOD\CONDITION_OR_DX\DX_SOURCE\%' or sf.c_fullname is null) THEN 
     CASE WHEN pf.pdxsource = 'P' THEN 44786627 WHEN pf.pdxsource= 'S' THEN 44786629 ELSE '0' END 
     ELSE 38000245 END, 
 end_date, pcori_basecode, diag.concept_id, factline.start_date
 from i2b2fact factline
-inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
+inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num -- encounters limit amount of output
+	left outer join provider p on factline.provider_id = p.provider_source_value
  left outer join #sourcefact sf
 on	factline.patient_num=sf.patient_num
 and factline.encounter_num=sf.encounter_num
@@ -1049,22 +1228,25 @@ inner join concept_map_dx_dx diag on diag.c_basecode = factline.concept_cd and (
 -- Next, update observation table ---
 insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_datetime, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
 select  distinct fact.patient_num, case diag.mapped_domain when 'Observation' then diag.mapped_id else '0' END, fact.start_date, fact.start_date, 38000280 -- observation recorded from EHR
-  , 0, diag.PCORI_BASECODE, diag.concept_id, fact.encounter_num from i2b2fact fact 
+  , isnull(p.provider_id, enc.provider_id), diag.PCORI_BASECODE, diag.concept_id, fact.encounter_num from i2b2fact fact 
 inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- encounters limit amount of output
 inner join concept_map_dx_obs diag on diag.c_basecode = fact.concept_cd
+left outer join provider p on fact.provider_id = p.provider_source_value
 
 -- Next, update measurement table ---
 INSERT INTO [dbo].[measurement] with(tablock) ([person_id], [measurement_concept_id], [measurement_date], [measurement_datetime], [measurement_type_concept_id], [provider_id], [visit_occurrence_id], [measurement_source_value], [measurement_source_concept_id]) 
 select  distinct fact.patient_num, case diag.mapped_domain when 'Measurement' then diag.mapped_id else '0' END, fact.start_date, fact.start_date, 45754907 -- derived value. Other option is 5001, test ordered through EHR 
-  , 0, fact.encounter_num, diag.PCORI_BASECODE, diag.concept_id from i2b2fact fact
+  , isnull(p.provider_id, enc.provider_id), fact.encounter_num, diag.PCORI_BASECODE, diag.concept_id from i2b2fact fact
 inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- encounters limit amount of output
 inner join concept_map_dx_meas diag on diag.c_basecode = fact.concept_cd
+left outer join provider p on fact.provider_id = p.provider_source_value
 
 -- Next, update procedure table ---
 insert into procedure_occurrence with(tablock)( person_id,  procedure_concept_id, procedure_date, procedure_type_concept_id, modifier_concept_id, quantity, provider_id, visit_occurrence_id, procedure_source_value, procedure_source_concept_id, qualifier_source_value, procedure_datetime) 
-select  distinct fact.patient_num, case diag.mapped_domain when 'Procedure' then diag.mapped_id else '0' END, fact.start_date, 44786630 /*primary*/, 0, null, null, fact.encounter_num, diag.PCORI_BASECODE, diag.concept_id, null, fact.start_date
+select  distinct fact.patient_num, case diag.mapped_domain when 'Procedure' then diag.mapped_id else '0' END, fact.start_date, 44786630 /*primary*/, 0, null, isnull(p.provider_id, enc.provider_id), fact.encounter_num, diag.PCORI_BASECODE, diag.concept_id, null, fact.start_date
 from i2b2fact fact inner join concept_map_dx_proc diag on diag.c_basecode = fact.concept_cd
 inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- encounters limit amount of output
+left outer join provider p on fact.provider_id = p.provider_source_value
 
 end
 go
@@ -1078,22 +1260,11 @@ go
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure
 go
 
-create procedure OMOPprocedure as
+create procedure [dbo].[OMOPprocedure] as
 
 begin
 
----------------------------------------
--- Copied and tweaked from condition_ocurrence procedure 'OMOPDiagnosis'
----------------------------------------
-
----------------------- Old PCORI Columns----------------------------------------------------------
---				patid,			encounterid,	enc_type, admit_date, providerid, px, px_type, px_source,px_date) 
----------------------------------------------------------------------------------------------------
 insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_date, procedure_type_concept_id, modifier_concept_id, quantity, provider_id, visit_occurrence_id, procedure_source_value, procedure_source_concept_id, qualifier_source_value, procedure_datetime) 
----------------------- Old PCORI values ----------------------------------------------------------------
---enc.encounterid, fact.patient_num, 	enc.enc_type, enc.admit_date, 
---		enc.providerid, substring(pr.pcori_basecode,charindex(':',pr.pcori_basecode)+1,11) px, substring(pr.c_fullname,18,2) pxtype, 'NI' px_source,fact.start_date
---------------------------------------------------------------------------------------------------------------------------
 -- procedure_occurance_id ----------> set to identity column (not shown here)----------------------> Done
 -- person_id -----------------------> patient_num unique identifier for the patient in i2b2--------> Done
 -- procedure_concept_id ------------> i2o_mapping concept_id---------------------------------------> Done
@@ -1106,24 +1277,16 @@ insert into procedure_occurrence( person_id,  procedure_concept_id, procedure_da
 -- procedure_source_value ----------> PCORI base code from ontology -------------------------------> Done
 -- procuedure_source_concept_id ----> OMOP source code from ontology ------------------------------> Done
 -- qualifier_source_value ----------> The source code for the qualifier as it appears in the source data. What is this?????????????
-select  distinct fact.patient_num, isnull(prc.mapped_id, '0'), fact.start_date, 0, 0, null, provider.provider_id, fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id, null, fact.start_date
+select  distinct fact.patient_num, isnull(prc.mapped_id, '0'), fact.start_date, 0, 0, null, isnull(p.provider_id, enc.provider_id), fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id, null, fact.start_date
 from i2b2fact fact
----------------------------------------------------------
--- For every procedure there must be a corresponding visit - added this back bc otherwise not constrained to patientlist
------------------------------------------------------------
- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
-/* inner join PCORNET_PROC pproc on pproc.c_basecode = fact.concept_cd
- inner join i2o_mapping omap on pproc.omop_sourcecode=omap.omop_sourcecode and omap.domain_id='Procedure'*/
+ inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- Constraint to selected encounters
  inner join concept_map_px_px prc on prc.c_basecode = fact.concept_cd and (prc.mapped_domain='Procedure' or prc.domain_id='Procedure')
- left outer join provider on fact.provider_id = provider.provider_source_value --provider support added MJ 6/16/18
+ left outer join provider p on fact.provider_id = p.provider_source_value
 -----------------------------------------------------------
 -- look for observation facts that are procedures
 -- Q: Which procedures are primary and which are secondary and which are unknown
 ---------- For the moment setting everything unknown
 -----------------------------------------------------------
-
---where c_fullname like '\PCORI\PROCEDURE\%' 
---and omop_targettable='PROCEDURE_OCCURRENCE' -- this column was added 3/27/18
 
 end
 go
@@ -1138,48 +1301,79 @@ go
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPprocedure_secondary') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPprocedure_secondary
 go
 
-create procedure OMOPprocedure_secondary as
+create procedure [dbo].[OMOPprocedure_secondary] as
 
 begin
 
 
 -- Update observation table ---
 -- When mapped domain is not present, use unmapped code if it is CPT4, ICD-10, or HCPCS - these that do not have mappings are standard codes
-insert into observation with(tablock) (person_id,observation_concept_id,observation_date, observation_datetime, observation_type_concept_id,provider_id,observation_source_value,observation_source_concept_id,visit_occurrence_id)
-select  distinct fact.patient_num, case prc.mapped_domain when 'Observation' then prc.mapped_id else '0' END, fact.start_date, fact.start_date, 38000280 -- observation recorded from EHR
-  , provider.provider_id, prc.PCORI_BASECODE, prc.concept_id, fact.encounter_num from i2b2fact fact
- -- not tied to encounters-- inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num 
+-- =============================================================================
+-- Changed by: Ana Holzbach, 02/23/2024
+-- Join with concept table to find only standard concepts
+-- =============================================================================
+insert into observation with(tablock) 
+	(person_id,
+	 observation_concept_id,
+	 observation_date, 
+	 observation_datetime, 
+	 observation_type_concept_id,
+	 provider_id,
+	 observation_source_value,
+	 observation_source_concept_id,
+	 visit_occurrence_id)
+select distinct 
+	fact.patient_num, 
+	case prc.mapped_domain 
+		when 'Observation' then prc.mapped_id 
+		else '0' 
+	end, 
+	fact.start_date, 
+	fact.start_date, 
+	38000280, -- observation recorded from EHR
+	isnull(p.provider_id, enc.provider_id), 
+	prc.PCORI_BASECODE, 
+	prc.concept_id, 
+	fact.encounter_num 
+from i2b2fact fact
+inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- Constraint to selected encounters
 inner join concept_map_px_obs prc on prc.c_basecode = fact.concept_cd
-left outer join provider on fact.provider_id = provider.provider_source_value 
+left outer join provider p on fact.provider_id = p.provider_source_value 
+left outer join concept on prc.concept_id = concept.concept_id
+where concept.standard_concept = 'S';
 
 -- Next, update measurement table ---
 -- Millions of records (7k codes) get thrown into here - measurements like PTT that we have no value for
 INSERT INTO [dbo].[measurement] with(tablock) ([person_id], [measurement_concept_id], [measurement_date], [measurement_datetime], [measurement_type_concept_id], [provider_id], [visit_occurrence_id], [measurement_source_value], [measurement_source_concept_id]) 
 select  distinct fact.patient_num, case prc.mapped_domain when 'Measurement' then prc.mapped_id else '0' END, fact.start_date, fact.start_date, 45754907 -- derived value. Other option is 5001, test ordered through EHR 
-  , 0, fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id from i2b2fact fact
-inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- encounters needed to reduce output
+  , isnull(p.provider_id, enc.provider_id), fact.encounter_num, prc.PCORI_BASECODE, prc.concept_id from i2b2fact fact
+inner join visit_occurrence enc on enc.person_id = fact.patient_num and enc.visit_occurrence_id = fact.encounter_Num -- Constraint to selected encounters
 inner join concept_map_px_meas prc on prc.c_basecode = fact.concept_cd
+left outer join provider p on fact.provider_id = p.provider_source_value 
 
 -- Next, update dx table ---
 insert into condition_occurrence with (tablock) (person_id, visit_occurrence_id, condition_start_date, provider_id, condition_concept_id, condition_type_concept_id, condition_end_date, condition_source_value, condition_source_concept_id, condition_start_datetime) --pmndiagnosis (patid,encounterid, X enc_type, admit_date, providerid, dx, dx_type, dx_source, pdx)
-select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, enc.provider_id, 
+select distinct factline.patient_num, factline.encounter_num encounterid, enc.visit_start_date, isnull(p.provider_id, enc.provider_id), 
 case diag.mapped_domain when 'Condition' then diag.mapped_id else '0' END,  5086, -- Condition tested for by diagnostic procedure
 end_date, pcori_basecode, diag.concept_id, factline.start_date
 from i2b2fact factline
 inner join visit_occurrence enc on enc.person_id = factline.patient_num and enc.visit_occurrence_id = factline.encounter_Num
-inner join concept_map_px_dx diag on diag.c_basecode = factline.concept_cd 
+inner join concept_map_px_dx diag on diag.c_basecode = factline.concept_cd
+left outer join provider p on factline.provider_id = p.provider_source_value 
 
 -- Next, update drug table
 -- These are all (apparently) entries for vaccines
 insert into drug_exposure with (tablock) (person_id  , drug_concept_id, drug_exposure_start_date , drug_exposure_start_datetime, drug_exposure_end_date , drug_exposure_end_datetime  , drug_type_concept_id 
-  , visit_occurrence_id , drug_source_value , drug_source_concept_id , dose_unit_source_value )
+  , visit_occurrence_id , drug_source_value , drug_source_concept_id , dose_unit_source_value, provider_id )
 select distinct m.patient_num, rx.mapped_id, m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
  '43542358' -- Physician administered drug - these are all vaccines...
-, m.Encounter_num, rx.concept_code, rx.concept_id, units_cd
+, m.Encounter_num, rx.concept_code, rx.concept_id, units_cd, isnull(p.provider_id, enc.provider_id)
  from i2b2fact m inner join concept_map_px_rx rx on rx.c_basecode = m.concept_cd 
-inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- encounters needed to reduce output
+inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
+left outer join provider p on m.provider_id = p.provider_source_value 
 
 end
+
 go
 
 ----------------------------------------------------------------------------------------------------------------------------------------
@@ -1192,7 +1386,7 @@ IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPvital') 
 DROP PROCEDURE OMOPvital
 GO
 
-create procedure OMOPvital as
+create procedure [dbo].[OMOPvital] as
 begin
 
 
@@ -1218,12 +1412,12 @@ convert(date, m.start_date) meaure_date,
 M.start_date measure_time,
 '0', m.nval_num, substring(m.units_cd, 1, 50), substring(concat (tval_char, nval_num), 1, 50), 
 isnull(u.concept_id, '0'), isnull(vital.omop_sourcecode, '0'), isnull(vital.omop_sourcecode, '0'),
-'44818701', provider.provider_id, '0'
+'44818701', isnull(p.provider_id, enc.provider_id), '0'
 from i2b2fact m
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num
 inner join pcornet_vital vital on vital.c_basecode  = m.concept_cd
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
-left outer join provider on m.provider_id = provider.provider_source_value --provider support MJ 6/17/18
+left outer join provider p on m.provider_id = p.provider_source_value --provider support MJ 6/17/18
 where vital.c_fullname like '\PCORI\VITAL\%'
 and vital.i_loinc is not null 
 
@@ -1307,7 +1501,7 @@ isnull(lab.pcori_basecode, 'NI') LAB_LOINC,
 --isnull(lab.pcori_basecode, 'NI') LAB_PX,
 --'LC'  LAB_PX_TYPE,
 Cast(m.start_date as DATE) RESULT_DATE,   
-cast(m.start_Date as datetime) RESULT_TIME,
+CAST(CONVERT(char(5), M.start_date, 108) as datetime) RESULT_TIME,
 isnull(CASE WHEN m.ValType_Cd='T' THEN CASE WHEN m.Tval_Char IS NOT NULL THEN 'OT' ELSE '0' END END, '0') RESULT_QUAL, -- TODO: Should be a standardized value
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END RESULT_NUM,
 --CASE WHEN m.ValType_Cd='N' THEN (CASE isnull(nullif(m.TVal_Char,''),'NI') WHEN 'E' THEN 'EQ' WHEN 'NE' THEN 'OT' WHEN 'L' THEN 'LT' WHEN 'LE' THEN 'LE' WHEN 'G' THEN 'GT' WHEN 'GE' THEN 'GE' ELSE 'NI' END)  ELSE 'TX' END RESULT_MODIFIER,
@@ -1364,8 +1558,19 @@ GO
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPdrug_exposure') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPdrug_exposure;
 GO
-create procedure OMOPdrug_exposure as
+create procedure [dbo].[OMOPdrug_exposure] as
+--------------------------------------------------------------------
+-- DESCRIPTION: Inserts observation_facts that have RxNorm or NDC codes into measurment table as defined in the PCORNET_MED ontology
+-- Parameters: None
+-- Notes: None
+--------------------------------------------------------------------
+
+DECLARE @START_TIME DATETIME;
+DECLARE @END_TIME DATETIME;
+
 begin
+
+SET @START_TIME = GETDATE();
 
 -- Griffin's optimization: use temp tables rather than left joining directly - 12/9/15
     select pcori_basecode,c_fullname,instance_num,start_date,basis.provider_id,concept_cd,encounter_num,modifier_cd
@@ -1390,7 +1595,7 @@ begin
 			--inner join visit_occurrence enc on enc.person_id = quantity.patient_num and enc.visit_occurrence_id = quantity.encounter_Num
 		 join pcornet_med quantitycode 
 			on quantity.modifier_cd = quantitycode.c_basecode
-			and quantitycode.c_fullname like '\PCORI_MOD\RX_QUANTITY\'
+			and quantitycode.c_fullname like '\PCORI_MOD\RX_QUANTITY\%'
 
 	select nval_num,instance_num,start_date,refills.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #refills
@@ -1398,7 +1603,7 @@ begin
 			--inner join visit_occurrence enc on enc.person_id = refills.patient_num and enc.visit_occurrence_id = refills.encounter_Num
 		 join pcornet_med refillscode 
 			on refills.modifier_cd = refillscode.c_basecode
-			and refillscode.c_fullname like '\PCORI_MOD\RX_REFILLS\'
+			and refillscode.c_fullname like '\PCORI_MOD\RX_REFILLS\%'
 
     select nval_num,instance_num,start_date,supply.provider_id,concept_cd,encounter_num,modifier_cd 
 		into #supply
@@ -1406,7 +1611,12 @@ begin
 			--inner join visit_occurrence enc on enc.person_id = supply.patient_num and enc.visit_occurrence_id = supply.encounter_Num
 		 join pcornet_med supplycode 
 			on supply.modifier_cd = supplycode.c_basecode
-			and supplycode.c_fullname like '\PCORI_MOD\RX_DAYS_SUPPLY\'
+			and supplycode.c_fullname like '\PCORI_MOD\RX_DAYS_SUPPLY\%'
+
+    select tval_char,instance_num,start_date,provider_id,concept_cd,encounter_num,modifier_cd
+		into #route
+		from i2b2fact route
+		where modifier_cd = 'MED:ROUTE'
 
 -- insert data with outer joins to ensure all records are included even if some data elements are missing
 insert into drug_exposure(
@@ -1423,7 +1633,7 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , quantity	--------------------------> from ontology \PCORI_MOD\RX_QUANTITY ----------------> Done
 , days_supply	--------------------------> from ontology \PCORI_MOD\RX_DAYS_SUPPLY ----------> Done
 , sig----------------------------> The directions "signetur" on the Drug prescription as recorded in the original prescription or dispensing record -- Passing the frequency---> Done
-, route_concept_id ---------------> routes of administrating medication oral, intravenous, etc... Need a mapping ---------------------------> NOT DONE
+, route_concept_id ---------------> routes of administrating medication oral, intravenous, etc... Added route mapping for MED:ROUTE values. ---> DONE
 -- NOT IN 5.2 -- , effective_drug_dose ------------> Numerical Value of Drug dose for this Drug_Exposure... Do we have this? --> No 
 -- NOT IN 5.2 -- , dose_unit_concept_id -----------> UCUM Codes concpet c where c.vocabulary_id = 'UCUM and c.standard_concept='S' and c.domain_id='Unit'----> NOT DONE
 , lot_number ----------------------> varchar... do we have this value?------------------------> No
@@ -1431,25 +1641,48 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , visit_occurrence_id -----------------> observation_fact.encounter_num i2b2 id for the encounter (visit)-> Done
 , drug_source_value ----------> PCORI base code from ontology preffered vocabularies RxNorm, NDC, CVX, or the name, do we have this? ---> Use the base_code which NDC or RXNorm ---> Done
 , drug_source_concept_id ----> OMOP source code from ontology  do we have this mapping?-------> NOT DONE
-, route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> NOT DONE
+, route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> Pulling values from MED:ROUTE modifiers
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
-select distinct m.patient_num, isnull(isnull(omap.concept_id,omap.source_id),0) , m.start_date, cast(m.start_Date as datetime), isnull(m.end_date,m.start_date), cast(isnull(m.end_date,m.start_date) as datetime),
+select distinct m.patient_num
+, isnull(isnull(omap.concept_id,omap.source_id),0) 
+, m.start_date
+, cast(m.start_Date as datetime)
+, isnull(m.end_date,m.start_date)
+, cast(isnull(m.end_date,m.start_date) as datetime),
  case 
    when basis.c_fullname is null or basis.c_fullname like '\PCORI_MOD\RX_BASIS\PR\%' then '38000177'
    when basis.c_fullname like '\PCORI_MOD\RX_BASIS\DI\%' then '38000175'
  end
 , null
-, refills.nval_num refills, quantity.nval_num quantity, supply.nval_num supply, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
-, null, null
-, provider.provider_id, m.Encounter_num, mo.C_BASECODE, null, null, units_cd
+, refills.nval_num refills
+, quantity.nval_num quantity
+, supply.nval_num supply
+, substring(freq.pcori_basecode,charindex(':',freq.pcori_basecode)+1,2) frequency
+, local.standard_concept_id
+, null
+, isnull(p.provider_id, enc.provider_id)
+, m.Encounter_num
+, mo.C_BASECODE
+, null
+, local.local_concept_name
+, units_cd
  from i2b2fact m
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
 -- Note the only reason we need i2o_mapping is to figure which are standard codes, sourcecode already comes from RxCui
- left join i2o_mapping omap on mo.i_stdcode=omap.source_code and omap.domain_id='Drug'
+ left join i2o_mapping omap on mo.i_stdcode=omap.source_code and mo.i_stddomain=omap.source_vocabulary_id and omap.domain_id='Drug'
+ left outer join provider p on p.provider_source_value = m.provider_id
 
 -- TODO: This join adds several minutes to the load - must be debugged
+
+	left join #route route
+    on m.encounter_num = route.encounter_num
+    and m.concept_cd = route.concept_Cd
+    and m.start_date = route.start_date
+    and m.provider_id = route.provider_id
+    and m.instance_num = route.instance_num
+	left join local_concept_map local on route.tval_char = local.local_concept_name
 
     left join #basis basis
     on m.encounter_num = basis.encounter_num
@@ -1490,6 +1723,8 @@ select distinct m.patient_num, isnull(isnull(omap.concept_id,omap.source_id),0) 
 
      where mo.i_stdcode is not null
 
+	 SET @END_TIME = GETDATE();
+	PRINT 'OMOPDRUG_EXPOSURE EXECUTION TIME: ' +  CAST(datediff(s, @start_time, @end_time) as nvarchar(50));
 end
 GO
 
@@ -1763,7 +1998,8 @@ GO
 
 IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'OMOPmeasurementLab') AND type in (N'P', N'PC')) DROP PROCEDURE OMOPmeasurementLab;
 GO
-create procedure [OMOPmeasurementLab] as
+
+create procedure [dbo].[OMOPmeasurementLab] as
 --------------------------------------------------------------------
 -- DESCRIPTION: Inserts observation_facts that have loinc codes into measurment table
 -- Parameters: None
@@ -1776,7 +2012,7 @@ begin
 
 SET @START_TIME = GETDATE();
 -- Build Modifiers
-exec build_modifiers lab
+--exec build_modifiers lab
 
 INSERT INTO dbo.[measurement]
      ([person_id]
@@ -1797,15 +2033,25 @@ INSERT INTO dbo.[measurement]
       ,[provider_id]
       ,[operator_concept_id])
 
-SELECT DISTINCT  M.patient_num person_id,
+SELECT
+M.patient_num person_id,
 M.encounter_num visit_occurrence_id,
 isnull(lab.i_stdcode, '') measurement_source_value,
 Cast(m.start_date as DATE) measurement_date,   
 cast(m.start_Date as datetime) measurement_datetime,
--- NOTE: Are these concept_ids the ones analysts want?
-CASE isnull(m.VALUEFLAG_CD,'0') WHEN 'H' THEN '45876384' WHEN 'L' THEN '45881666' WHEN 'A' THEN '45878745' WHEN 'N' THEN '45884153' ELSE '0' END value_as_concept_id,
+--Sets value as concept in following order
+--     TVal matches concept name straight up
+--     TVal matches local concept map
+--     NVal for 3 covid antibody/antigens are low < 1
+--     NVal for 3 covid antibody/antigens are hight > 1
+case when m.valtype_cd = 'T' then 
+	isnull(concept.concept_id, local_concept_map.standard_concept_id) 
+	when (m.valtype_cd = 'N' and omap.concept_id in ('706178', '706177', '586522') and m.NVAL_NUM <= 1.0) then '45880296'
+	when (m.valtype_cd = 'N' and omap.concept_id in ('706178', '706177', '586522') and m.NVAL_NUM > 1.0) then '45877985'
+	else null end value_as_concept_id,
 CASE WHEN m.ValType_Cd='N' THEN m.NVAL_NUM ELSE null END value_as_number,
-isnull(m.Units_CD,'') unit_source_value, 
+-- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
+isnull(isnull(lab.i_unit, m.Units_CD),'') unit_source_value, 
 
 -- TODO: Need to get normal ranges working again
 --nullif(lab.NORM_RANGE_LOW,'') range_low,
@@ -1813,37 +2059,43 @@ isnull(m.Units_CD,'') unit_source_value,
 null range_low, null range_high,
 
 CASE WHEN m.ValType_Cd='T' THEN substring(m.TVal_Char,1,50) ELSE substring(cast(m.NVal_Num as varchar),1,50) END value_source_value,
-isnull(u.concept_id, '0') unit_concept_id, 
+-- NOTE: Units are pulled from PHS Ontology first (extracted from XML) , if not present then it falls back to units_cd on the observation fact
+isnull(isnull(u2.concept_id, u.concept_id), '0') unit_concept_id, 
 isnull(omap.concept_id, '0') measurement_concept_id, 
 isnull(omap.source_id, '0') measurement_source_concept_id, 
-'44818702', provider.provider_id, '0'
+'44818702'
+, isnull(p.provider_id, enc.provider_id)
+, '0'
 
 FROM i2b2fact M  
 inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num -- Constraint to selected encounters
-inner join (select distinct i_stdcode,c_basecode from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
-inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.domain_id='Measurement'
---left outer join pmn_labnormal norm on ont_parent.c_basecode=norm.LAB_NAME
+inner join (select distinct i_stdcode,c_basecode, i_unit from i2o_ontology_lab where i_stddomain='LOINC') lab on lab.c_basecode  = M.concept_cd
+inner join i2o_mapping omap on lab.i_stdcode=omap.source_code and omap.source_vocabulary_id='LOINC' and omap.domain_id='Measurement'
+-- NOTE: Both m.units_cd (original observation fact unit value) and m.i_unit (extract unit value from PHS XML) are mapped to UCUM standard concepts
 left outer join i2o_unitsmap u on u.units_name=m.units_cd
-left outer join provider on m.provider_id = provider.provider_source_value --provider support
+left outer join i2o_unitsmap u2 on u2.units_name=lab.i_unit
+left outer join provider p on m.provider_id = p.provider_source_value --provider support
+left outer join local_concept_map on m.tval_char = local_concept_map.local_concept_name and local_concept_map.standard_vocabulary_id = 'LOINC'
+left outer join concept on m.tval_char = concept.concept_name and concept.domain_id = 'Meas Value' and concept.standard_concept = 'S' and concept.vocabulary_id = 'LOINC'
 
 
-LEFT OUTER JOIN
-temp_mod_priority p
-ON  M.patient_num=p.patient_num
-and M.encounter_num=p.encounter_num
-and M.provider_id=p.provider_id
-and M.concept_cd=p.concept_Cd
-and M.start_date=p.start_Date
-and M.instance_num = p.instance_num
+--LEFT OUTER JOIN
+--temp_mod_priority p
+--ON  M.patient_num=p.patient_num
+--and M.encounter_num=p.encounter_num
+--and M.provider_id=p.provider_id
+--and M.concept_cd=p.concept_Cd
+--and M.start_date=p.start_Date
+--and M.instance_num = p.instance_num
  
-LEFT OUTER JOIN
-temp_mod_result_loc l
-ON  M.patient_num=l.patient_num
-and M.encounter_num=l.encounter_num
-and M.provider_id=l.provider_id
-and M.concept_cd=l.concept_Cd
-and M.start_date=l.start_Date
-and M.instance_num = l.instance_num
+--LEFT OUTER JOIN
+--temp_mod_result_loc l
+--ON  M.patient_num=l.patient_num
+--and M.encounter_num=l.encounter_num
+--and M.provider_id=l.provider_id
+--and M.concept_cd=l.concept_Cd
+--and M.start_date=l.start_Date
+--and M.instance_num = l.instance_num
  
 WHERE  m.MODIFIER_CD='@';
 
@@ -1881,6 +2133,7 @@ TRUNCATE TABLE drug_exposure
 TRUNCATE TABLE measurement
 TRUNCATE TABLE procedure_occurrence
 DELETE FROM visit_occurrence -- Truncate cannot work with FPK constraints
+DELETE FROM visit_detail
 DELETE FROM person -- Truncate cannot work with FPK constraints
 DELETE FROM provider -- Truncate cannot work with FPK constraints
 DELETE FROM location -- Truncate cannot work with FPK constraints
@@ -1955,6 +2208,9 @@ RAISERROR('OMOPcare_site %s', 0, 1,@FLAG) WITH NOWAIT;
 exec OMOPencounter
 set @FLAG=cast(getdate() as varchar(30))
 RAISERROR('OMOPencounter %s', 0, 1,@FLAG) WITH NOWAIT;
+exec OMOPencounter_secondary
+set @FLAG=cast(getdate() as varchar(30))
+RAISERROR('OMOPencounter_secondary %s', 0, 1,@FLAG) WITH NOWAIT;
 exec OMOPobservationperiod
 set @FLAG=cast(getdate() as varchar(30))
 RAISERROR('OMOPobservationperiod %s', 0, 1,@FLAG) WITH NOWAIT;
