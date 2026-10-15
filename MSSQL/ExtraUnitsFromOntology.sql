@@ -3,6 +3,8 @@
 --     Starting with a handlful of i2o_unit upserts
 -- Authored by: Kevin Embree
 -- Authored On: 2020-12-10
+
+-- More units added: Ana Holzbach, 2026-09-14
 ---------------------------------------------------------------------------------------
 --Manually UPSERT unit mappings for most commonly used unit values in the PHS XML values
 -- Run any time after OMOPBuildMapping has been run to add these mappings back in.
@@ -185,3 +187,85 @@ IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = '/100 wbcs' )
 ELSE 
     INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
     VALUES ( '/100 wbcs', 9032, 'S' );
+    
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'beats/minute' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8541,
+		standard_concept = 'S'
+    WHERE units_name = 'beats/minute';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'beats/minute', 8541, 'S' );
+    
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'kg/m2' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 9531,
+		standard_concept = 'S'
+    WHERE units_name = 'kg/m2';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'kg/m2', 9531, 'S' );
+    
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'millimeter of mercury' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8876,
+		standard_concept = 'S'
+    WHERE units_name = 'millimeter of mercury';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'millimeter of mercury', 8876, 'S' );
+    
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'pound' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8739,
+		standard_concept = 'S'
+    WHERE units_name = 'pound';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'pound', 8739, 'S' );
+
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'Pounds' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8739,
+		standard_concept = 'S'
+    WHERE units_name = 'Pounds';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'Pounds', 8739, 'S' );
+    
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'Centimeters' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 8582,
+		standard_concept = 'S'
+    WHERE units_name = 'Centimeters';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'Centimeters', 8582, 'S' );
+
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'inch' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 9327,
+		standard_concept = 'S'
+    WHERE units_name = 'inch';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'inch', 9327, 'S' );
+
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'Fahrenheit' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 9289,
+		standard_concept = 'S'
+    WHERE units_name = 'Fahrenheit';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'Fahrenheit', 9289, 'S' );
+    
+IF EXISTS ( SELECT * FROM i2o_unitsmap u where u.units_name = 'Kilograms' )
+    UPDATE dbo.i2o_unitsmap
+        SET concept_id = 9529,
+		standard_concept = 'S'
+    WHERE units_name = 'Kilograms';
+ELSE 
+    INSERT dbo.i2o_unitsmap ( units_name, concept_id, standard_concept )
+    VALUES ( 'Kilograms', 9529, 'S' );
+   

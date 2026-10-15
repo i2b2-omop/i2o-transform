@@ -11,6 +11,19 @@
 -- After preparePCORnetOntology.sql 
 --	   Run the new preparePHSOntology.sql
 -- Run after import of a new i2b2metadata ontology table.
+--     This is done with each delivery of a new data mart.---------------------------------------------------------------------------------------------
+-- Mass General Brigham specific modifications 
+-- Description: i2o_transform works off the PCORNET ARCH ontologies, following script
+--              --Prepares the transformation to use i2b2 ontoloies in certain circumstances
+-- Authored by: Jeff Klann
+-- Updated by: Kevin Embree on 2020-12-07 to use units specified in the MGB i2b2 XML
+--             Added extraction of xml creationDateTime onto i2b2metadata
+--------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------
+-- When to run....
+-- After preparePCORnetOntology.sql 
+--	   Run the new preparePHSOntology.sql
+-- Run after import of a new i2b2metadata ontology table.
 --     This is done with each delivery of a new data mart.
 --------------------------------------------------------------------------------------------
 
@@ -20,6 +33,10 @@
 -- i_stddomain for the type of code was extracted from c_metadataxml ('LOINC', 'RXNORM', 'ICD9', etc...)
 -- i_unit for the unit of measure used for the given code ('Inches', 'rbc/1 ml', etc ...)
 -- i_date_of_xml_creation for the date the xml was created
+--------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------------------
+-- Ana Holzbach 09-15-2026: remove i_date_of_xml_creation
 --------------------------------------------------------------------------------------------
 ALTER TABLE [dbo].[i2b2metadata]
 	ADD [i_stdcode] varchar(100) NULL, 
@@ -73,17 +90,17 @@ GO
 update m set i_stddomain='LOINC'
       ,i_stdcode=try_cast(m.c_metadataxml as xml).value('(/ValueMetadata/Loinc)[1]','VARCHAR(50)')
 	  , i_unit = try_cast(m.c_metadataxml as xml).value('(/ValueMetadata/UnitValues/NormalUnits)[1]','VARCHAR(25)')
-	  , i_date_of_xml_creation = try_cast(m.c_metadataxml as xml).value('(/ValueMetadata/CreationDateTime)[1]','DateTime')
+	  --, i_date_of_xml_creation = try_cast(m.c_metadataxml as xml).value('(/ValueMetadata/CreationDateTime)[1]','DateTime')
 	  from i2b2metadata m 
  where m.C_FULLNAME like '%\I2B2MetaData\LabTests\%'
  and m.c_metadataxml is not null
  and m.c_metadataxml != ''
 GO
--- Create the new views - change COVID_Mart to your DB name
+
 IF  EXISTS (SELECT * FROM sys.views WHERE name = N'i2o_ontology_lab') DROP VIEW i2o_ontology_lab
 IF  EXISTS (SELECT * FROM sys.views WHERE name = N'i2o_ontology_drug') DROP VIEW i2o_ontology_drug
 GO
-create view i2o_ontology_lab as (select * from AllOfUs_Mart..i2b2metadata where i_stddomain='LOINC')
+create view i2o_ontology_lab as (select * from i2b2metadata where i_stddomain='LOINC')
 GO
-create view i2o_ontology_drug as (select * from AllOfUs_Mart..pcornet_med where i_stddomain='RxNorm' or i_stddomain='NDC')
+create view i2o_ontology_drug as (select * from pcornet_med where i_stddomain='RxNorm' or i_stddomain='NDC')
 GO

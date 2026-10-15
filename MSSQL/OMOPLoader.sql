@@ -1640,7 +1640,7 @@ person_id   -----------------------> patient_num unique identifier for the patie
 , provider_id ---------------------> (Set to 0 for Data Sprint 2)-----------------------------> Done
 , visit_occurrence_id -----------------> observation_fact.encounter_num i2b2 id for the encounter (visit)-> Done
 , drug_source_value ----------> PCORI base code from ontology preffered vocabularies RxNorm, NDC, CVX, or the name, do we have this? ---> Use the base_code which NDC or RXNorm ---> Done
-, drug_source_concept_id ----> OMOP source code from ontology  do we have this mapping?-------> NOT DONE
+, drug_source_concept_id ----> Original source concept from i2o_mapping; preserves combination identity ---> Done
 , route_source_value ----------> Varchar ....Do we have this?-------yes-----------------------> Pulling values from MED:ROUTE modifiers
 , dose_unit_source_value ----------> Varchar .....Do we have this?--yes-----------------------> NOT DONE
 )
@@ -1664,13 +1664,13 @@ select distinct m.patient_num
 , isnull(p.provider_id, enc.provider_id)
 , m.Encounter_num
 , mo.C_BASECODE
-, null
+, isnull(omap.source_id, 0)
 , local.local_concept_name
 , units_cd
  from i2b2fact m
  inner join pcornet_med mo on m.concept_cd = mo.c_basecode 
  inner join visit_occurrence enc on enc.person_id = m.patient_num and enc.visit_occurrence_id = m.encounter_Num 
--- Note the only reason we need i2o_mapping is to figure which are standard codes, sourcecode already comes from RxCui
+-- Retain both the standard drug concept and the original source concept, including one-to-many mappings.
  left join i2o_mapping omap on mo.i_stdcode=omap.source_code and mo.i_stddomain=omap.source_vocabulary_id and omap.domain_id='Drug'
  left outer join provider p on p.provider_source_value = m.provider_id
 
